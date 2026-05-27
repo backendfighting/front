@@ -14,6 +14,8 @@ type SetView = (view: string) => void;
 // ==========================================
 
 function LoginView({ setView } : { setView: SetView }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
       return(
       <div className="card">
                     <div style={{ backgroundColor: '#e9e7ff', width: '52px', height: '52px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '48px auto 16px' }}>
@@ -23,14 +25,20 @@ function LoginView({ setView } : { setView: SetView }) {
                     <div className="input-group">
                       <label>이메일</label>
                       <div style={{ position: 'relative' }}>
-                        <input type="email" placeholder="example@email.com" defaultValue="example@email.com" />
+                        <input type="email" 
+                        value = {email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="example@email.com"/>
                         <Mail size={18} style={{ position: 'absolute', right: '14px', top: '20px', color: '#b5b1bc' }} />
                       </div>
                     </div>
                     <div className="input-group">
                       <label>비밀번호</label>
                       <div style={{ position: 'relative' }}>
-                        <input type="password" placeholder="비밀번호를 입력하세요" defaultValue="12345678" />
+                        <input type="password" 
+                        value = {password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="비밀번호를 입력하세요"/>
                         <Lock size={18} style={{ position: 'absolute', right: '44px', top: '20px', color: '#b5b1bc' }} />
                         <Eye size={18} style={{ position: 'absolute', right: '14px', top: '20px', color: '#b5b1bc' }} />
                       </div>
