@@ -7,13 +7,50 @@ import {
 } from 'lucide-react';
 import './App.css';
 
+// 🚨 서버 주소! 
+const BASE_URL = 'http://localhost:8080'; 
+
 type SetView = (view: string) => void;
 
 // ==========================================
 // 1. 외부 게이트웨이 독립 컴포넌트 선언 영역
 // ==========================================
 function LoginView({ setView }: { setView: SetView }) {
+  const [email, setEmail] = useState('example@email.com'); 
+  const [password, setPassword] = useState('12345678');   
   const [showPassword, setShowPassword] = useState(false);
+
+  // 🌐 백엔드 로그인 API 통신 함수
+  const handleLogin = async () => {
+    // 💡 백엔드 서버가 아직 안 켜졌을 때도 프론트엔드 디자인을 
+    // 테스트할 수 있도록 기본 계정(example@email.com)은 서버 검증 없이 바로 통과시킵니다.
+    if (email === 'example@email.com' && password === '12345678') {
+      setView('main');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BASE_URL}/api/user/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem('token', data.token); 
+        alert('로그인에 성공했습니다!');
+        setView('main');
+      } else {
+        alert(data.message || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
+      }
+    } catch (error) {
+      console.error('로그인 에러:', error);
+      setView('error');
+    }
+  };
+
   return (
     <div className="card">
       <div style={{ backgroundColor: '#e9e7ff', width: '52px', height: '52px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '48px auto 16px' }}>
@@ -23,20 +60,20 @@ function LoginView({ setView }: { setView: SetView }) {
       <div className="input-group">
         <label>이메일</label>
         <div style={{ position: 'relative' }}>
-          <input type="email" placeholder="example@email.com" defaultValue="example@email.com" />
+          <input type="email" placeholder="example@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
           <Mail size={18} style={{ position: 'absolute', right: '14px', top: '20px', color: '#b5b1bc' }} />
         </div>
       </div>
       <div className="input-group">
         <label>비밀번호</label>
         <div style={{ position: 'relative' }}>
-          <input type={showPassword ? "text" : "password"} placeholder="비밀번호를 입력하세요" defaultValue="12345678" />
+          <input type={showPassword ? "text" : "password"} placeholder="비밀번호를 입력하세요" value={password} onChange={(e) => setPassword(e.target.value)} />
           <Lock size={18} style={{ position: 'absolute', right: '44px', top: '20px', color: '#b5b1bc' }} />
           <Eye size={18} className="cursor-pointer" style={{ position: 'absolute', right: '14px', top: '20px', color: showPassword ? '#6c63ff' : '#b5b1bc' }} onClick={() => setShowPassword(!showPassword)} />
         </div>
       </div>
       <div style={{ height: '10px' }} />
-      <button className="primary-button" onClick={() => setView('main')}>로그인</button>
+      <button className="primary-button" onClick={handleLogin}>로그인</button>
       <p style={{ marginTop: '24px', fontSize: '13px', color: '#7a7680' }}>
         계정이 없으신가요? <span className="text-link" onClick={() => setView('register')}>회원가입</span>
       </p>
@@ -46,6 +83,11 @@ function LoginView({ setView }: { setView: SetView }) {
 }
 
 function RegisterView({ setView }: { setView: SetView }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordCheck, setPasswordCheck] = useState('');
+  const [nickname, setNickname] = useState('');
+
   const [agreements, setAgreements] = useState({
     terms: false,
     privacy: false,
@@ -55,15 +97,48 @@ function RegisterView({ setView }: { setView: SetView }) {
   const allChecked = agreements.terms && agreements.privacy && agreements.marketing;
 
   const handleAllAgreeChange = (checked: boolean) => {
-    setAgreements({
-      terms: checked,
-      privacy: checked,
-      marketing: checked
-    });
+    setAgreements({ terms: checked, privacy: checked, marketing: checked });
   };
 
   const handleIndividualChange = (key: 'terms' | 'privacy' | 'marketing', checked: boolean) => {
     setAgreements(prev => ({ ...prev, [key]: checked }));
+  };
+
+  const handleRegisterSubmit = async () => {
+    if (!email || !password || !nickname) {
+      return alert('모든 정보를 입력해주세요.');
+    }
+    if (password !== passwordCheck) {
+      return alert('비밀번호가 일치하지 않습니다.');
+    }
+    if (!agreements.terms || !agreements.privacy) {
+      return alert('필수 약관에 동의하셔야 가입이 가능합니다.');
+    }
+
+    try {
+      const response = await fetch(`${BASE_URL}/api/user/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          nickname,
+          marketingAgreement: agreements.marketing
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('회원가입을 축하합니다! 로그인을 진행해주세요.');
+        setView('login');
+      } else {
+        alert(data.message || '회원가입에 실패했습니다. 다시 시도해주세요.');
+      }
+    } catch (error) {
+      console.error('회원가입 에러:', error);
+      setView('error');
+    }
   };
 
   return (
@@ -78,10 +153,10 @@ function RegisterView({ setView }: { setView: SetView }) {
           <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0' }}>새로운 시작을 함께해요</h2>
           <p style={{ fontSize: '13px', color: '#b5b1bc' }}>간단한 정보를 입력하고 서비스를 시작하세요.</p>
         </div>
-        <div className="input-group"><label>이메일</label><input type="email" placeholder="example@email.com" /></div>
-        <div className="input-group"><label>비밀번호</label><input type="password" placeholder="비밀번호를 입력하세요" /></div>
-        <div className="input-group"><label>비밀번호 확인</label><input type="password" placeholder="비밀번호를 다시 입력하세요" /></div>
-        <div className="input-group"><label>닉네임</label><input type="text" placeholder="닉네임을 입력하세요" /></div>
+        <div className="input-group"><label>이메일</label><input type="email" placeholder="example@email.com" value={email} onChange={(e)=>setEmail(e.target.value)} /></div>
+        <div className="input-group"><label>비밀번호</label><input type="password" placeholder="비밀번호를 입력하세요" value={password} onChange={(e)=>setPassword(e.target.value)} /></div>
+        <div className="input-group"><label>비밀번호 확인</label><input type="password" placeholder="비밀번호를 다시 입력하세요" value={passwordCheck} onChange={(e)=>setPasswordCheck(e.target.value)} /></div>
+        <div className="input-group"><label>닉네임</label><input type="text" placeholder="닉네임을 입력하세요" value={nickname} onChange={(e)=>setNickname(e.target.value)} /></div>
         
         <div className="agreement-box">
           <div className="agreement-item" style={{ borderBottom: '1px solid #f1f0f5', paddingBottom: '10px', marginBottom: '8px' }}>
@@ -104,7 +179,7 @@ function RegisterView({ setView }: { setView: SetView }) {
             <span className="view-link" onClick={() => alert('[마케팅 수신 동의 안내]\n신규 기능 런칭 및 목표 리포트 정기 구독 알림 수신에 동의합니다.')}>보기</span>
           </div>
         </div>
-        <button className="primary-button" style={{ marginTop: '24px' }} onClick={() => setView('login')}>회원가입 완료</button>
+        <button className="primary-button" style={{ marginTop: '24px' }} onClick={handleRegisterSubmit}>회원가입 완료</button>
       </div>
     </div>
   );
@@ -129,7 +204,7 @@ function ErrorView({ setView }: { setView: SetView }) {
 }
 
 function NotiView({ setView, notifications, setNotifications, notiFilter, setNotiFilter }: any) {
-  const filteredNoti = notifications.filter((n: any) => notiFilter === 'unread' ? n.unread : true);
+  const filteredNoti = (notifications || []).filter((n: any) => notiFilter === 'unread' ? n.unread : true);
   return (
     <div className="card">
       <div className="header-row">
@@ -140,13 +215,13 @@ function NotiView({ setView, notifications, setNotifications, notiFilter, setNot
       <div className="filter-tabs">
         <button className={`chip ${notiFilter === 'all' ? 'active' : ''}`} onClick={() => setNotiFilter('all')}>전체</button>
         <button className={`chip ${notiFilter === 'unread' ? 'active' : ''}`} onClick={() => setNotiFilter('unread')}>읽지 않음</button>
-        <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#b5b1bc', alignSelf: 'center' }}>새 알림: {notifications.filter((n:any)=>n.unread).length}</span>
+        <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#b5b1bc', alignSelf: 'center' }}>새 알림: {(notifications || []).filter((n:any)=>n.unread).length}</span>
       </div>
       <div className="scroll-content">
         <div style={{ fontSize: '12px', color: '#b5b1bc', marginBottom: '8px', fontWeight: '600' }}>오늘</div>
         {filteredNoti.map((n: any) => (
           <div key={n.id} className="list-item" onClick={() => {
-            setNotifications(notifications.map((item: any) => item.id === n.id ? {...item, unread: false} : item));
+            setNotifications((notifications || []).map((item: any) => item.id === n.id ? {...item, unread: false} : item));
           }}>
             <div style={{ width: 36, height: 36, background: n.type === 'todo' ? '#eef2ff' : '#fff5ed', borderRadius: 10, marginRight: 12, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               {n.type === 'todo' ? '📊' : '🎉'}
@@ -208,7 +283,6 @@ function TodoAddView({ setView, onAddTodo }: { setView: SetView, onAddTodo: (tit
             ))}
           </div>
         </div>
-        <div className="reward-box">✨ 목표 달성 시 포인트 및 배지 리워드가 획득됩니다!</div>
         <button className="dark-button del-btn" onClick={() => { setTitle(''); setMemo(''); setView('main'); }}>🗑️ 초기화</button>
       </div>
     </div>
@@ -261,12 +335,61 @@ function GoalAddView({ setView, onAddGoal }: { setView: SetView, onAddGoal: (tit
   );
 }
 
+function FriendAddView({ setView, onAddFriend }: { setView: SetView, onAddFriend: (name: string, handle: string) => void }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const sampleUsers = [
+    { name: '김다은', handle: '@daeun_k' },
+    { name: '이민우', handle: '@minwoo_lee' },
+    { name: '박서연', handle: '@seoyeon_p' }
+  ];
+
+  const filteredUsers = sampleUsers.filter(u => u.name.includes(searchTerm) || u.handle.includes(searchTerm));
+
+  return (
+    <div className="card">
+      <div className="header-row">
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <h3 className="header-title">친구 추가</h3>
+        <div style={{ width: 24 }} />
+      </div>
+      <div style={{ position: 'relative', marginBottom: '20px' }}>
+        <input placeholder="닉네임 또는 아이디로 검색 (예: 김다은)" value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} style={{ paddingLeft: '40px' }} />
+        <Search size={18} style={{ position: 'absolute', left: '14px', top: '20px', color: '#b5b1bc' }} />
+      </div>
+      <div className="scroll-content">
+        <div style={{ fontSize: '12px', color: '#7a7680', marginBottom: '12px', fontWeight: '600' }}>추천 및 검색 결과</div>
+        {filteredUsers.length > 0 ? (
+          filteredUsers.map((user, idx) => (
+            <div key={idx} className="list-item" style={{ background: '#fff', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: '700' }}>{user.name}</div>
+                <div style={{ fontSize: '11px', color: '#b5b1bc' }}>{user.handle}</div>
+              </div>
+              <button 
+                style={{ padding: '6px 14px', background: '#6c63ff', color: 'white', border: 'none', borderRadius: '10px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+                onClick={() => {
+                  onAddFriend(user.name, user.handle);
+                  alert(`${user.name}님이 친구 목록에 성공적으로 등록되었습니다!`);
+                  setView('main');
+                }}
+              >
+                추가
+              </button>
+            </div>
+          ))
+        ) : <p style={{ fontSize: '13px', color: '#aaa', textAlign: 'center', padding: '20px' }}>일치하는 사용자가 없습니다.</p>}
+      </div>
+    </div>
+  );
+}
+
 // ==========================================
 // 2. 메인 대시보드 뷰 통합 제어 모듈
 // ==========================================
 function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFilter, setTodoFilter, goals, setGoals, goalFilter, setGoalFilter, statsPeriod, setStatsPeriod, friendSearch, setFriendSearch, friends, setFriends, setSelectedGoalId, selectedGoalId, setResultType, setShowGoalResult, showGoalResult, resultType, onOpenMenu, selectedCalendarDay, setSelectedCalendarDay }: any) {
   
-  const filteredTodos = todos.filter((t:any) => {
+  const filteredTodos = (todos || []).filter((t:any) => {
     if (todoFilter === 'today') return t.date === '2026-04-06';
     if (todoFilter === 'done') return t.done;
     return true;
@@ -276,18 +399,30 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
   const doneCount = filteredTodos.filter((t:any) => t.done).length;
   const liveProgress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
+  const totalGoalsCount = (goals || []).length;
+  const dynamicOverallProgress = totalGoalsCount > 0 
+    ? Math.round((goals || []).reduce((acc: number, curr: any) => acc + (curr.progress || 0), 0) / totalGoalsCount) 
+    : 0;
+
   const renderItemRow = (t: any) => (
     <div key={t.id} className="list-item" style={{ background: '#fff' }}>
       <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1 }} onClick={() => {
-        setTodos(todos.map((item:any) => item.id === t.id ? {...item, done: !item.done} : item));
+        setTodos((todos || []).map((item:any) => item.id === t.id ? {...item, done: !item.done} : item));
       }}>
         {t.done ? <CheckCircle2 size={18} color="#6c63ff" style={{ marginRight: 12 }} /> : <Circle size={18} color="#ccc" style={{ marginRight: 12 }} />}
         <span style={{ fontWeight: '600', fontSize: '14px', textDecoration: t.done ? 'line-through' : 'none', color: t.done ? '#aaa' : '#333' }}>
           {t.title}
         </span>
+        <span style={{ 
+          fontSize: '11px', fontWeight: '700', marginLeft: '8px', padding: '2px 6px', borderRadius: '6px',
+          backgroundColor: t.priority === 'high' ? '#fff1f1' : t.priority === 'normal' ? '#fff9db' : '#f1f3f5',
+          color: t.priority === 'high' ? '#ff4d4d' : t.priority === 'normal' ? '#f59f00' : '#868e96'
+        }}>
+          {t.priority === 'high' ? '높음' : t.priority === 'normal' ? '보통' : '낮음'}
+        </span>
       </div>
       <MoreVertical size={16} className="cursor-pointer" color="#b5b1bc" onClick={() => {
-        if (confirm('이 일정을 삭제하시겠습니까?')) setTodos(todos.filter((item:any) => item.id !== t.id));
+        if (confirm('이 일정을 삭제하시겠습니까?')) setTodos((todos || []).filter((item:any) => item.id !== t.id));
       }} />
     </div>
   );
@@ -346,7 +481,7 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
 
       case 'calendar': 
         const targetDateStr = `2026-04-${selectedCalendarDay < 10 ? '0' + selectedCalendarDay : selectedCalendarDay}`;
-        const matchedCalendarTodos = todos.filter((t: any) => t.date === targetDateStr);
+        const matchedCalendarTodos = (todos || []).filter((t: any) => t.date === targetDateStr);
 
         return (
           <>
@@ -393,7 +528,7 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
                     className="list-item" 
                     style={{ background: '#fff', justifyContent: 'space-between' }} 
                     onClick={() => {
-                      setTodos(todos.map((item: any) => item.id === t.id ? {...item, done: !item.done} : item));
+                      setTodos((todos || []).map((item: any) => item.id === t.id ? {...item, done: !item.done} : item));
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -413,7 +548,7 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
         );
 
       case 'goal': 
-        const filteredGoals = goals.filter((g:any) => {
+        const filteredGoals = (goals || []).filter((g:any) => {
           if (goalFilter === 'active') return g.status === '진행중';
           if (goalFilter === 'success') return g.status === '성공';
           return true;
@@ -433,11 +568,16 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
             <div className="scroll-content">
               <div className="dashboard-card" style={{ background: '#586589', color: 'white' }}>
                 <span style={{ fontSize: '12px', opacity: 0.8 }}>나의 전체 달성률</span>
-                <h2 style={{ fontSize: '26px', margin: '4px 0 10px 0', fontWeight: '800', color: '#fff' }}>72% <span style={{ fontSize: '13px', color: '#a5b4fc' }}>↗ +5%</span></h2>
-                <div className="progress-bar" style={{ background: 'rgba(255,255,255,0.2)' }}><div className="progress-fill" style={{ width: '72%', background: 'white' }}></div></div>
+                <h2 style={{ fontSize: '26px', margin: '4px 0 10px 0', fontWeight: '800', color: '#fff' }}>
+                  {dynamicOverallProgress}%
+                </h2>
+                <div className="progress-bar" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                  <div className="progress-fill" style={{ width: `${dynamicOverallProgress}%`, background: 'white' }}></div>
+                </div>
               </div>
+              
               {filteredGoals.map((g:any) => (
-                <div key={g.id} className="list-item" style={{ paddingRight: '48px' }} onClick={() => {
+                <div key={g.id} className="list-item" style={{ paddingRight: '48px', position: 'relative' }} onClick={() => {
                   setSelectedGoalId(g.id);
                   setResultType(g.status === '성공' ? 'success' : g.status === '실패' ? 'fail' : null);
                   setShowGoalResult(true);
@@ -445,14 +585,14 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
                   <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <b style={{ fontSize: '14px', color: '#1a191b' }}>{g.title}</b>
-                      <span style={{ fontSize: '11px', color: g.status === '성공' ? '#2ecc71' : '#6c63ff', fontWeight: '700' }}>{g.status}</span>
+                      <span style={{ fontSize: '11px', color: g.status === '성공' ? '#2ecc71' : g.status === '실패' ? '#ff4d4d' : '#6c63ff', fontWeight: '700' }}>{g.status}</span>
                     </div>
-                    <div className="progress-bar" style={{ margin: '4px 0 6px 0' }}><div className="progress-fill" style={{ width: `${g.progress}%`, background: g.status === '성공' ? '#2ecc71' : '#6c63ff' }}></div></div>
+                    <div className="progress-bar" style={{ margin: '4px 0 6px 0' }}><div className="progress-fill" style={{ width: `${g.progress}%`, background: g.status === '성공' ? '#2ecc71' : g.status === '실패' ? '#ff4d4d' : '#6c63ff' }}></div></div>
                     <span style={{ fontSize: '11px', color: '#b5b1bc' }}>{g.progress}% 달성 ({g.startDate} ~ {g.endDate})</span>
                   </div>
                   <Trash2 size={15} color="#ff4d4d" className="cursor-pointer" style={{ position: 'absolute', right: '16px', bottom: '18px', zIndex: 2 }} onClick={(e) => {
                     e.stopPropagation();
-                    if(confirm('이 목표를 삭제하시겠습니까?')) setGoals(goals.filter((item:any)=>item.id !== g.id));
+                    if(confirm('이 목표를 삭제하시겠습니까?')) setGoals((goals || []).filter((item:any)=>item.id !== g.id));
                   }} />
                 </div>
               ))}
@@ -461,38 +601,90 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
           </>
         );
 
-      case 'stats': return (
-        <>
-          <div className="header-row">
-            <Menu size={22} color="#4e4b52" className="cursor-pointer" onClick={onOpenMenu} />
-            <h3 className="header-title">통계</h3>
-            <Bell size={22} onClick={() => setView('noti')} className="cursor-pointer" color="#4e4b52" />
-          </div>
-          <div className="filter-tabs" style={{ justifyContent: 'center' }}>
-            <button className={`chip ${statsPeriod === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
-            <button className={`chip ${statsPeriod === 'month' ? 'active' : ''}`} onClick={() => setStatsPeriod('month')}>월간</button>
-            <button className={`chip ${statsPeriod === 'year' ? 'active' : ''}`} onClick={() => setStatsPeriod('year')}>연간</button>
-          </div>
-          <div className="scroll-content">
-            <div style={{ display: 'flex', background: '#fbfbff', border: '1px solid #f1f0f5', borderRadius: '18px', padding: '16px', justifyContent: 'space-around', textAlign: 'center', marginBottom: '16px' }}>
-              <div><p style={{ fontSize: '11px', color: '#7a7680' }}>총 목표</p><b style={{ fontSize: '16px', color: '#1a191b' }}>12</b></div>
-              <div><p style={{ fontSize: '11px', color: '#7a7680' }}>성공</p><b style={{ fontSize: '16px', color: '#6c63ff' }}>67%</b></div>
-              <div><p style={{ fontSize: '11px', color: '#7a7670' }}>실패</p><b style={{ fontSize: '16px', color: '#ff4d4d' }}>33%</b></div>
+      case 'stats': 
+        let chartData: { label: string; rate: number }[] = [];
+        let failData: { name: string; rate: number; color: string }[] = [];
+
+        if (statsPeriod === 'week') {
+          chartData = [
+            { label: '월', rate: 30 }, { label: '화', rate: 45 }, { label: '수', rate: 60 },
+            { label: '목', rate: 75 }, { label: '금', rate: 50 }, { label: '토', rate: 85 }, { label: '일', rate: 95 }
+          ];
+          failData = [
+            { name: '⏱️ 시간 부족', rate: 55, color: '#ff4d4d' },
+            { name: '🎯 동기 부족', rate: 20, color: '#ffb700' },
+            { name: '🔋 체력 저하', rate: 25, color: '#586589' }
+          ];
+        } else if (statsPeriod === 'year') {
+          chartData = [
+            { label: '1월', rate: 20 }, { label: '2월', rate: 35 }, { label: '3월', rate: 45 },
+            { label: '4월', rate: 55 }, { label: '5월', rate: 70 }, { label: '6월', rate: 80 },
+            { label: '7월', rate: 85 }, { label: '8월', rate: 90 }, { label: '9월', rate: 75 },
+            { label: '10월', rate: 60 }, { label: '11월', rate: 50 }, { label: '12월', rate: 40 }
+          ];
+          failData = [
+            { name: '⏱️ 시간 부족', rate: 35, color: '#ff4d4d' },
+            { name: '🎯 동기 부족', rate: 30, color: '#ffb700' },
+            { name: '📅 계획 오류', rate: 35, color: '#4d7cff' }
+          ];
+        } else { 
+          chartData = [
+            { label: '2월', rate: 40 }, { label: '3월', rate: 65 }, { label: '4월', rate: 80 }
+          ];
+          failData = [
+            { name: '⏱️ 시간 부족', rate: 40, color: '#ff4d4d' },
+            { name: '🎯 동기 부족', rate: 25, color: '#ffb700' },
+            { name: '🌍 외부 요인', rate: 35, color: '#9b59b6' }
+          ];
+        }
+
+        return (
+          <>
+            <div className="header-row">
+              <Menu size={22} color="#4e4b52" className="cursor-pointer" onClick={onOpenMenu} />
+              <h3 className="header-title">통계</h3>
+              <Bell size={22} onClick={() => setView('noti')} className="cursor-pointer" color="#4e4b52" />
             </div>
-            <div style={{ fontSize: '13px', fontWeight: '700', marginLeft: '4px' }}>달성 추이</div>
-            <div className="bar-chart-wrapper">
-              <div className="chart-bar-container"><div className="chart-bar" style={{ height: '40px' }}></div><span className="chart-label">2월(40%)</span></div>
-              <div className="chart-bar-container"><div className="chart-bar" style={{ height: '65px' }}></div><span className="chart-label">3월(65%)</span></div>
-              <div className="chart-bar-container"><div className="chart-bar active" style={{ height: '90px' }}></div><span className="chart-label">4월(80%)</span></div>
+            <div className="filter-tabs" style={{ justifyContent: 'center' }}>
+              <button className={`chip ${statsPeriod === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
+              <button className={`chip ${statsPeriod === 'month' ? 'active' : ''}`} onClick={() => setStatsPeriod('month')}>월간</button>
+              <button className={`chip ${statsPeriod === 'year' ? 'active' : ''}`} onClick={() => setStatsPeriod('year')}>연간</button>
             </div>
-            <div style={{ fontSize: '13px', fontWeight: '700', marginLeft: '4px', marginTop: '18px' }}>실패 원인 분석</div>
-            <div style={{ background: '#fff', border: '1px solid #f1f0f5', borderRadius: '18px', padding: '14px', marginTop: '8px' }}>
-              <div style={{ fontSize: '12px', margin: '4px 0' }}>⏱️ 시간 부족 (40%) <div className="progress-bar"><div className="progress-fill" style={{ width: '40%', background: '#ff4d4d' }}></div></div></div>
-              <div style={{ fontSize: '12px', margin: '12px 0 4px 0' }}>🎯 동기 부족 (25%) <div className="progress-bar"><div className="progress-fill" style={{ width: '25%', background: '#ffb700' }}></div></div></div>
+            <div className="scroll-content">
+              <div style={{ display: 'flex', background: '#fbfbff', border: '1px solid #f1f0f5', borderRadius: '18px', padding: '16px', justifyContent: 'space-around', textAlign: 'center', marginBottom: '16px' }}>
+                <div><p style={{ fontSize: '11px', color: '#7a7680' }}>총 목표</p><b style={{ fontSize: '16px', color: '#1a191b' }}>12</b></div>
+                <div><p style={{ fontSize: '11px', color: '#7a7680' }}>성공</p><b style={{ fontSize: '16px', color: '#6c63ff' }}>67%</b></div>
+                <div><p style={{ fontSize: '11px', color: '#7a7670' }}>실패</p><b style={{ fontSize: '16px', color: '#ff4d4d' }}>33%</b></div>
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: '700', marginLeft: '4px' }}>달성 추이</div>
+              
+              <div style={{ height: '150px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '16px 8px', background: '#fff', border: '1px solid #f1f0f5', borderRadius: '18px', marginTop: '8px', overflowX: 'auto' }}>
+                {chartData.map((item, idx) => {
+                  const barWidth = statsPeriod === 'year' ? '12px' : statsPeriod === 'week' ? '22px' : '40px';
+                  const isHighlighted = item.label === '일' || item.label === '4월' || item.label === '6월';
+                  return (
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: barWidth, gap: '4px' }}>
+                      <div style={{ height: `${item.rate * 0.9}px`, width: barWidth, background: isHighlighted ? '#6c63ff' : '#e5e4e7', borderRadius: '4px' }}></div>
+                      <span style={{ fontSize: '9px', color: '#7a7680', scale: statsPeriod === 'year' ? '0.8' : '1', whiteSpace: 'nowrap' }}>{item.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ fontSize: '13px', fontWeight: '700', marginLeft: '4px', marginTop: '18px' }}>실패 원인 분석</div>
+              <div style={{ background: '#fff', border: '1px solid #f1f0f5', borderRadius: '18px', padding: '14px', marginTop: '8px' }}>
+                {failData.map((f, idx) => (
+                  <div key={idx} style={{ fontSize: '12px', margin: idx === 0 ? '4px 0' : '12px 0 4px 0' }}>
+                    {f.name} ({f.rate}%) 
+                    <div className="progress-bar" style={{ marginTop: '4px' }}>
+                      <div className="progress-fill" style={{ width: `${f.rate}%`, background: f.color }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        </>
-      );
+          </>
+        );
 
       case 'friend': 
         return (
@@ -508,14 +700,14 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
             </div>
             <div className="scroll-content">
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#7a7680', margin: '4px 0 8px 4px', fontWeight: '600' }}>
-                <span>친구 목록 ({friends.length}명)</span>
+                <span>친구 목록 ({(friends || []).length}명)</span>
               </div>
-              {friends.filter((f:any)=>f.name.includes(friendSearch)).map((f:any) => (
+              {(friends || []).filter((f:any)=>f.name.includes(friendSearch)).map((f:any) => (
                 <div key={f.id} className="list-item" style={{ background: '#fff' }}>
                   <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e5e4e7', marginRight: 12 }}></div>
                   <b>{f.name}</b>
                   <MoreVertical size={16} className="ml-auto" color="#b5b1bc" onClick={() => {
-                    if(confirm('친구를 삭제하시겠습니까?')) setFriends([]);
+                    if(confirm('친구를 삭제하시겠습니까?')) setFriends((friends || []).filter((item:any)=>item.id !== f.id));
                   }} />
                 </div>
               ))}
@@ -548,10 +740,10 @@ function MainAppView({ setView, activeTab, setActiveTab, todos, setTodos, todoFi
             </div>
             <button className="primary-button" onClick={() => {
               if(selectedGoalId) {
-                setGoals(goals.map((g:any) => g.id === selectedGoalId ? {
+                setGoals((goals || []).map((g:any) => g.id === selectedGoalId ? {
                   ...g, 
                   status: resultType === 'success' ? '성공' : resultType === 'fail' ? '실패' : '진행중',
-                  progress: resultType === 'success' ? 100 : g.progress
+                  progress: resultType === 'success' ? 100 : resultType === 'fail' ? 0 : g.progress
                 } : g));
               }
               setShowGoalResult(false);
@@ -612,6 +804,10 @@ function App() {
     setGoals([...goals, { id: Date.now(), title, category, desc, startDate, endDate, progress: 0, status: '진행중', reason: '', memo: '' }]);
   };
 
+  const handleAddFriend = (name: string, handle: string) => {
+    setFriends([...friends, { id: Date.now(), name, handle, isFriend: true, requestSent: false }]);
+  };
+
   return (
     <div className="container">
       {view === 'login' && <LoginView setView={setView} />}
@@ -650,6 +846,7 @@ function App() {
       )}
       {view === 'todo-add' && <TodoAddView setView={setView} onAddTodo={handleAddTodo} />}
       {view === 'goal-add' && <GoalAddView setView={setView} onAddGoal={handleAddGoal} />}
+      {view === 'friend-add' && <FriendAddView setView={setView} onAddFriend={handleAddFriend} />}
 
       {/* 마이페이지 사이드바 슬라이드 오버레이 */}
       {isSidebarOpen && (
