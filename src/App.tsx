@@ -301,10 +301,8 @@ function MainAppView({
     return true; 
   });
 
-  // 성공/실패로 전환된 목표는 백엔드가 progress 필드를 갱신해주지 않는 경우가 있어 status 기준으로 보정
   const getGoalProgress = (g: any) => g.status === '성공' ? 100 : g.status === '실패' ? 0 : (g.progress || 0);
 
-  // 전체 달성률 = 성공한 목표 수 / 전체 목표 수 (목표 하나당 지분은 1/전체개수, 소숫점 버림)
   const dynamicOverallProgress = goals.length > 0 ? Math.floor((goals.filter((g: any) => g.status === '성공').length / goals.length) * 100) : 0;
 
   const renderItemRow = (t: any) => {
@@ -733,8 +731,17 @@ function App() {
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${BASE_URL}/api/routines/${routineId}`, { method: 'DELETE', headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
-      if (response.ok) fetchBackendRoutines();
-    } catch (error) { console.error(error); }
+      if (response.ok) {
+        fetchBackendRoutines();
+      } else {
+        const text = await response.text().catch(() => '');
+        console.error('루틴 삭제 실패', response.status, text);
+        alert(`루틴 삭제에 실패했습니다. (status: ${response.status})`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('루틴 삭제 중 네트워크 오류가 발생했습니다.');
+    }
   };
 
   const handleAddTodo = async (title: string, memo: string, date: string, time: string, priority: string, type: string) => {
