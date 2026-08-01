@@ -760,18 +760,30 @@ function App() {
     } catch { }
   };
 
-  const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch(`${BASE_URL}/api/goals/${id}/status`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify({ status, progress, reason })
-      });
-      if(response.ok) fetchGoals();
-      else setGoals(prev => prev.map(g => g.id === id ? { ...g, status, progress, reason } : g));
-    } catch {
-      setGoals(prev => prev.map(g => g.id === id ? { ...g, status, progress, reason } : g));
+const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
+  const token = localStorage.getItem('token');
+  try {
+    const response = await fetch(`${BASE_URL}/api/goals/${id}/status`, {
+      method: 'PATCH', // 백엔드가 @PatchMapping일 경우 PATCH로 통일
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Authorization': token ? `Bearer ${token}` : '' 
+      }, 
+      body: JSON.stringify({ status, progress, reason })
+    });
+    
+    if (response.ok) {
+      // 통신 성공 시 서버에서 최신 목록을 다시 불러옴
+      fetchGoals(); 
+    } else {
+      // 통신 실패 시 화면을 바꾸지 않고 경고창 띄우기
+      alert('목표 상태 업데이트에 실패했습니다.');
     }
-  };
+  } catch (error) {
+    console.error('서버 통신 에러:', error);
+    alert('서버와 연결할 수 없습니다.');
+  }
+};
 
   const handleDeleteGoal = async (id: number) => {
     const token = localStorage.getItem('token');

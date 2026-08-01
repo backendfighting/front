@@ -13,11 +13,11 @@
 /* 피그마 규격 고정 프레임 모바일 박스 */
 .card {
   background: white;
-  padding: 28px 24px 84px 24px; /* 네비게이션바 확보 */
-  border-radius: 32px;
+  padding: 28px 24px 84px 24px;
+  border-radius: 36px;
   width: 100%;
-  max-width: 380px;
-  height: 760px;
+  max-width: 390px;
+  height: 780px;
   text-align: center;
   box-shadow: 0 12px 30px rgba(108, 99, 255, 0.04);
   display: flex;
@@ -30,7 +30,7 @@
 .scroll-content {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: 10px;
+  padding-bottom: 20px;
   text-align: left;
 }
 .scroll-content::-webkit-scrollbar {
@@ -60,13 +60,12 @@ input, select, textarea {
   color: #333;
   outline: none;
 }
-textarea { resize: none; font-family: inherit; }
 
 /* 메인 테마 액션 버튼 */
 .primary-button {
   width: 100%;
   padding: 16px;
-  background-color: #6c63ff;
+  background-color: #586589;
   color: white;
   border: none;
   border-radius: 16px;
@@ -93,23 +92,22 @@ textarea { resize: none; font-family: inherit; }
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
-.header-title { font-size: 18px; font-weight: 700; color: #1a191b; margin: 0; }
+.header-title { font-size: 18px; font-weight: 800; color: #1a191b; margin: 0; }
 
 /* 필터 전환 칩 그룹 및 칩 버튼 */
 .filter-tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
   overflow-x: auto;
 }
 .chip {
-  padding: 8px 16px;
+  padding: 8px 18px;
   background: #f1f0f5;
   border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: #7a7680;
   border: none;
   cursor: pointer;
@@ -121,58 +119,63 @@ textarea { resize: none; font-family: inherit; }
 .bottom-nav {
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 74px;
-  background: rgba(255, 255, 255, 0.98);
+  height: 80px;
+  background: white;
   display: flex;
   justify-content: space-around;
   align-items: center;
   border-top: 1px solid #f0f0f2;
-  padding: 0 12px;
+  border-bottom-left-radius: 36px;
+  border-bottom-right-radius: 36px;
+  padding: 0 16px 12px 16px;
   z-index: 10;
 }
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   cursor: pointer;
   color: #b5b1bc;
   flex: 1;
 }
 .nav-item.active { color: #6c63ff; }
-.nav-item span { font-size: 11px; font-weight: 600; }
+.nav-item span { font-size: 11px; font-weight: 700; }
 
-/* 대시보드 요약용 프로그레스 보드 */
-.dashboard-card {
-  background: #f4f3ff;
-  border-radius: 22px;
-  padding: 20px;
-  text-align: left;
-  margin-bottom: 16px;
-}
-.dashboard-card h3 { margin: 6px 0 12px 0; font-size: 22px; color: #1a191b; }
-
-/* 공통 리스트 로우 */
+/* 공통 리스트 로우 (디자인 적용) */
 .list-item {
   display: flex;
   align-items: center;
-  padding: 16px;
-  background: #fbfbff;
-  border: 1px solid #f5f4f7;
-  border-radius: 18px;
-  margin-bottom: 10px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid #f0eff2;
+  border-radius: 20px;
+  margin-bottom: 12px;
   cursor: pointer;
-  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
 }
 
-/* 캘린더 전용 그리드 시스템 매트릭스 */
+/* 📌 우선순위 뱃지 스타일 모음 */
+.priority-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-left: 10px;
+  display: inline-block;
+}
+.badge-high { color: #ff4d4d; background: #fff5f5; }
+.badge-medium { color: #ffb700; background: #fffaf0; }
+.badge-low { color: #7a7680; background: #f1f0f5; }
+
+/* ✨ 복구된 캘린더 전용 그리드 시스템 */
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 8px;
   margin-top: 12px;
 }
-.calendar-day-header { font-size: 11px; font-weight: 600; color: #aaa; padding: 4px 0; }
+.calendar-day-header { font-size: 11px; font-weight: 600; color: #aaa; padding: 4px 0; text-align: center; }
 .calendar-cell {
   height: 38px;
   display: flex;
@@ -188,111 +191,21 @@ textarea { resize: none; font-family: inherit; }
 .calendar-cell.active { background-color: #6c63ff; color: white; }
 .calendar-cell.empty { cursor: default; }
 
-/* 원형 프로그레스 인디케이터 대용 뱃지 */
-.circle-badge {
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  background: white;
-  border: 3px solid #6c63ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #6c63ff;
-}
-
-/* 통계 지표 차트 레이아웃 */
-.bar-chart-wrapper {
-  display: flex;
-  height: 140px;
-  align-items: flex-end;
-  justify-content: space-around;
-  padding: 16px;
-  background: #fff;
-  border: 1px solid #f1f0f5;
-  border-radius: 18px;
-  margin-top: 12px;
-}
-.chart-bar-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-.chart-bar {
-  width: 24px;
+/* ✨ 복구된 목표 달성률 바(Progress Bar) */
+.progress-bar {
+  height: 8px;
   background: #e5e4e7;
-  border-radius: 6px;
-  transition: height 0.4s ease;
-}
-.chart-bar.active { background: #6c63ff; }
-.chart-label { font-size: 11px; color: #7a7680; font-weight: 600; }
-
-/* 토글 스위치 컴포넌트 */
-.switch-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-}
-.switch-input { display: none; }
-.switch-button {
-  width: 44px; height: 24px;
-  background-color: #e5e4e7;
-  border-radius: 12px;
-  position: relative;
-  transition: background-color 0.2s;
-}
-.switch-button::before {
-  content: "";
-  position: absolute;
-  top: 2px; left: 2px;
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  background-color: white;
-  transition: transform 0.2s;
-}
-.switch-input:checked + .switch-button { background-color: #6c63ff; }
-.switch-input:checked + .switch-button::before { transform: translateX(20px); }
-
-/* 리워드 영역 박스 디자인 */
-.reward-box {
-  background: #fff9f0;
-  border: 1px dashed #ffb700;
-  border-radius: 14px;
-  padding: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #b77c00;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
   width: 100%;
-  box-sizing: border-box;
 }
-
-/* 플로팅 버튼 */
-.fab {
-  position: absolute;
-  right: 20px; bottom: 94px;
-  background: #586589;
-  color: white;
-  width: 52px; height: 52px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(88, 101, 137, 0.3);
-  z-index: 5;
+.progress-fill {
+  height: 100%;
+  background: #6c63ff;
+  border-radius: 4px;
+  transition: width 0.3s ease;
 }
-.cursor-pointer { cursor: pointer; }
-.ml-auto { margin-left: auto; }
-.text-link { color: #6c63ff; font-weight: 700; cursor: pointer; }
-.del-btn { background: #fff1f1; color: #ff4d4d; border: 1px solid #ffe3e3; margin-top: 16px; }
 
 /* 바텀 모달 제어 레이어 */
 .bottom-sheet-overlay {
@@ -322,7 +235,7 @@ textarea { resize: none; font-family: inherit; }
 .result-btn.success.active { border-color: #6c63ff; color: #6c63ff; background: #f5f4ff; }
 .result-btn.fail.active { border-color: #ff4d4d; color: #ff4d4d; background: #fff5f5; }
 
-/* 회원가입 약관 레이아웃 배치 수정 */
+/* 회원가입 약관 레이아웃 */
 .agreement-box {
   background: #fbfbff;
   border: 1px solid #f0eff2;
@@ -347,52 +260,22 @@ textarea { resize: none; font-family: inherit; }
   margin: 0;
   cursor: pointer;
 }
-.agreement-item .view-link {
-  margin-left: auto;
-  font-size: 12px;
-  color: #b5b1bc;
-  text-decoration: underline;
+
+/* 플로팅 버튼 */
+.fab {
+  position: absolute;
+  right: 24px; bottom: 104px;
+  background: #586589;
+  color: white;
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   cursor: pointer;
+  box-shadow: 0 6px 16px rgba(88, 101, 137, 0.3);
+  z-index: 5;
 }
 
-/* 마이페이지 사이드바 오버레이 애니메이션 */
-.sidebar-overlay {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 200;
-  display: flex;
-  justify-content: flex-start;
-}
-.sidebar-content {
-  width: 280px;
-  height: 100%;
-  background: white;
-  box-shadow: 4px 0 24px rgba(0,0,0,0.15);
-  padding: 40px 24px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-}
-.sidebar-profile {
-  padding-bottom: 24px;
-  border-bottom: 1px solid #f0f0f2;
-  margin-bottom: 24px;
-}
-.sidebar-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 12px;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #333;
-  cursor: pointer;
-  margin-bottom: 8px;
-}
-.sidebar-menu-item:hover {
-  background: #f4f3ff;
-  color: #6c63ff;
-}
+.cursor-pointer { cursor: pointer; }
+.text-link { color: #6c63ff; font-weight: 700; cursor: pointer; }
