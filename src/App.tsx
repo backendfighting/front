@@ -301,7 +301,11 @@ function MainAppView({
     return true; 
   });
 
-  const dynamicOverallProgress = goals.length > 0 ? Math.round(goals.reduce((acc: number, curr: any) => acc + (curr.progress || 0), 0) / goals.length) : 0;
+  // 성공/실패로 전환된 목표는 백엔드가 progress 필드를 갱신해주지 않는 경우가 있어 status 기준으로 보정
+  const getGoalProgress = (g: any) => g.status === '성공' ? 100 : g.status === '실패' ? 0 : (g.progress || 0);
+
+  // 전체 달성률 = 성공한 목표 수 / 전체 목표 수 (목표 하나당 지분은 1/전체개수, 소숫점 버림)
+  const dynamicOverallProgress = goals.length > 0 ? Math.floor((goals.filter((g: any) => g.status === '성공').length / goals.length) * 100) : 0;
 
   const renderItemRow = (t: any) => {
     const id = t.todoId || t.id || t.todo_id;
@@ -494,7 +498,7 @@ function MainAppView({
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '12px', color: '#b5b1bc', fontWeight: '500' }}>
-                        {g.progress || 0}% 달성 ({g.startDate || '2026-03-01'} ~ {g.endDate || '2026-03-31'})
+                        {getGoalProgress(g)}% 달성 ({g.startDate || '2026-03-01'} ~ {g.endDate || '2026-03-31'})
                       </span>
                       <Trash2 size={18} color="#ff4d4d" onClick={(e) => { e.stopPropagation(); if(confirm('삭제하시겠습니까?')) onDeleteGoal(g.id); }} />
                     </div>
