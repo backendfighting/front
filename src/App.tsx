@@ -509,26 +509,57 @@ function MainAppView({
         );
 
       case 'stats': 
-        // 🌟 주간, 월간, 연간 필터에 따른 동적 데이터 반영 로직
+        // 🌟 주간, 월간, 연간 필터에 따른 동적 데이터 (실제 목표 데이터 연동)
         let chartData: { label: string; rate: number }[] = [];
         
+        // 현재 선택된 달력 날짜(globalDate)를 기준으로 연/월 계산
+        const [bYear, bMonthStr, bDayStr] = globalDate.split('-');
+        const currentYear = parseInt(bYear);
+        const currentMonth = parseInt(bMonthStr) - 1; // 0~11 (자바스크립트 달력 규칙)
+
+        // 💡 헬퍼 함수: 특정 기간에 마감일(endDate)이 속한 목표들의 성공률 계산
+        const calculateRate = (filterFn: (y: number, m: number, d: number, fullDate: string) => boolean) => {
+          const matchedGoals = goals.filter((g: any) => {
+            if (!g.endDate) return false;
+            const [gy, gm, gd] = g.endDate.split('-').map(Number);
+            return filterFn(gy, gm - 1, gd, g.endDate);
+          });
+          const successCount = matchedGoals.filter((g: any) => g.status === '성공').length;
+          return matchedGoals.length > 0 ? Math.round((successCount / matchedGoals.length) * 100) : 0;
+        };
+
         if (statsPeriod === 'week') {
-          chartData = [
-            { label: '월', rate: 45 }, { label: '화', rate: 30 }, { label: '수', rate: 60 }, 
-            { label: '목', rate: 75 }, { label: '금', rate: 90 }, { label: '토', rate: 50 }, { label: '일', rate: 85 }
-          ];
+          // 1. 주간: 현재 선택된 날짜가 포함된 주의 월~일요일
+          const base = new Date(currentYear, currentMonth, parseInt(bDayStr));
+          const day = base.getDay();
+          const diff = base.getDate() - day + (day === 0 ? -6 : 1); // 월요일 찾기
+          const monday = new Date(base.setDate(diff));
+
+          const weekLabels = ['월', '화', '수', '목', '금', '토', '일'];
+          chartData = weekLabels.map((label, index) => {
+            const tDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index);
+            const tDateStr = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}-${String(tDate.getDate()).padStart(2, '0')}`;
+            return { label, rate: calculateRate((y, m, d, fullDate) => fullDate === tDateStr) };
+          });
+
         } else if (statsPeriod === 'month') {
-          chartData = [
-            { label: '1주차', rate: 40 }, { label: '2주차', rate: 65 }, 
-            { label: '3주차', rate: 80 }, { label: '4주차', rate: 95 }
-          ];
+          // 2. 월간: 현재 월을 7일 단위로 1~5주차 분할
+          const monthLabels = ['1주차', '2주차', '3주차', '4주차', '5주차'];
+          chartData = monthLabels.map((label, index) => {
+            const startDay = index * 7 + 1;
+            const endDay = (index + 1) * 7;
+            return { 
+              label, 
+              rate: calculateRate((y, m, d) => y === currentYear && m === currentMonth && d >= startDay && d <= endDay) 
+            };
+          });
+
         } else if (statsPeriod === 'year') {
-          chartData = [
-            { label: '1월', rate: 20 }, { label: '2월', rate: 35 }, { label: '3월', rate: 45 }, 
-            { label: '4월', rate: 85 }, { label: '5월', rate: 70 }, { label: '6월', rate: 50 },
-            { label: '7월', rate: 60 }, { label: '8월', rate: 80 }, { label: '9월', rate: 90 },
-            { label: '10월', rate: 85 }, { label: '11월', rate: 95 }, { label: '12월', rate: 100 }
-          ];
+          // 3. 연간: 현재 연도의 1~12월
+          const yearLabels = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+          chartData = yearLabels.map((label, index) => {
+            return { label, rate: calculateRate((y, m) => y === currentYear && m === index) };
+          });
         }
 
         const failedGoals = goals.filter((g: any) => g.status === '실패');
@@ -771,18 +802,30 @@ function App() {
     } catch { }
   };
 
-  const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch(`${BASE_URL}/api/goals/${id}/status`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify({ status, progress, reason })
-      });
-      if(response.ok) fetchGoals();
-      else setGoals(prev => prev.map(g => g.id === id ? { ...g, status, progress, reason } : g));
-    } catch {
-      setGoals(prev => prev.map(g => g.id === id ? { ...g, status, progress, reason } : g));
+const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
+  const token = localStorage.getItem('token');
+  try {
+    const response = await fetch(`${BASE_URL}/api/goals/${id}/status`, {
+      method: 'PATCH', // 백엔드가 @PatchMapping일 경우 PATCH로 통일
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Authorization': token ? `Bearer ${token}` : '' 
+      }, 
+      body: JSON.stringify({ status, progress, reason })
+    });
+    
+    if (response.ok) {
+      // 통신 성공 시 서버에서 최신 목록을 다시 불러옴
+      fetchGoals(); 
+    } else {
+      // 통신 실패 시 화면을 바꾸지 않고 경고창 띄우기
+      alert('목표 상태 업데이트에 실패했습니다.');
     }
-  };
+  } catch (error) {
+    console.error('서버 통신 에러:', error);
+    alert('서버와 연결할 수 없습니다.');
+  }
+};
 
   const handleDeleteGoal = async (id: number) => {
     const token = localStorage.getItem('token');
