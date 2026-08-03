@@ -107,6 +107,7 @@ function RegisterView({ setView }: any) {
         alert('회원가입에 실패했습니다.');
       }
     } catch (error) {
+      console.error(error);
       alert('서버 통신 실패');
     }
   };
