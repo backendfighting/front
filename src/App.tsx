@@ -3,7 +3,7 @@ import {
   Mail, Lock, Eye, ChevronLeft, Flag, Bell, 
   CheckCircle2, Circle, MoreVertical, 
   Plus, Calendar, BarChart2, ClipboardList,
-  AlertCircle, RotateCcw, X, Check, Menu, Trash2
+  AlertCircle, RotateCcw, X, Check, Menu, Trash2, LogOut, User 
 } from 'lucide-react';
 import './App.css';
 
@@ -155,6 +155,65 @@ function ErrorView({ setView }: { setView: SetView }) {
   );
 }
 
+function NotiView({ setView, notifications, setNotifications, notiFilter, setNotiFilter }: any) {
+  const filteredNoti = (notifications || []).filter((n: any) => notiFilter === 'unread' ? n.unread : true);
+  const unreadCount = (notifications || []).filter((n: any) => n.unread).length;
+
+  return (
+    <div className="card">
+      <div className="header-row">
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <h3 className="header-title">알림</h3>
+        <div style={{ width: 24 }} />
+      </div>
+      
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', marginBottom: '24px' }}>
+        <div className="filter-tabs" style={{ padding: 0, marginBottom: 0, gap: '8px' }}>
+          <button className={`chip ${notiFilter === 'all' ? 'active' : ''}`} style={notiFilter !== 'all' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setNotiFilter('all')}>전체</button>
+          <button className={`chip ${notiFilter === 'unread' ? 'active' : ''}`} style={notiFilter !== 'unread' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setNotiFilter('unread')}>읽지 않음</button>
+        </div>
+        <span style={{ fontSize: '13px', color: '#b5b1bc', fontWeight: '500' }}>새 알림: {unreadCount}</span>
+      </div>
+
+      <div className="scroll-content">
+        <div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>오늘</div>
+        
+        {filteredNoti.map((n: any) => (
+          <div key={n.id} 
+               style={{ 
+                 background: '#fff', 
+                 border: '1px solid #f1f0f5', 
+                 borderRadius: '20px', 
+                 padding: '20px', 
+                 marginBottom: '16px',
+                 display: 'flex',
+                 alignItems: 'flex-start',
+                 boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+                 cursor: 'pointer',
+                 opacity: n.unread ? 1 : 0.6
+               }} 
+               onClick={() => setNotifications((prev: any)=>prev.map((item: any) => item.id === n.id ? {...item, unread: false} : item))}
+          >
+            <div style={{ 
+              width: 44, height: 44, 
+              background: n.type === 'goal' ? '#fff0f0' : '#eef2ff', 
+              borderRadius: 14, marginRight: 16, display: 'flex', 
+              justifyContent: 'center', alignItems: 'center', fontSize: '20px', flexShrink: 0 
+            }}>
+              {n.icon}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#1a191b', marginBottom: '6px' }}>{n.title}</div>
+              <div style={{ fontSize: '13px', color: '#7a7680', marginBottom: '12px', lineHeight: '1.4' }}>{n.desc}</div>
+              <div style={{ fontSize: '12px', color: '#b5b1bc', fontWeight: '500' }}>{n.time}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TodoAddView({ setView, onAddTodo, globalDate }: any) {
   const [title, setTitle] = useState('');
   const [memo, setMemo] = useState('');
@@ -196,7 +255,6 @@ function TodoAddView({ setView, onAddTodo, globalDate }: any) {
   );
 }
 
-// 🌟 목표 추가 화면 (사진 '목표 추가.png' 반영)
 function GoalAddView({ setView, onAddGoal, globalDate }: any) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('운동');
@@ -275,12 +333,13 @@ function MainAppView({
   setSelectedGoalId, selectedGoalId, setResultType, setShowGoalResult, 
   showGoalResult, resultType, backendRoutines, 
   onToggleBackendRoutine, onUpdateGoalStatus, onDeleteTodo, onDeleteGoal, onDeleteRoutine, onToggleTodo,
-  globalDate, setGlobalDate 
+  globalDate, setGlobalDate,
+  onOpenNoti, onOpenMenu 
 }: any) {
   
-  const [failReason, setFailReason] = useState<string>('⏱️ 시간 부족');
+  const [failReasons, setFailReasons] = useState<string[]>([]);
   
-  const targetDateObj = new Date(globalDate);
+  const targetDateObj = new Date(globalDate || getTodayStr());
   const calYear = targetDateObj.getFullYear();
   const calMonth = targetDateObj.getMonth() + 1;
   const selectedCalendarDay = targetDateObj.getDate();
@@ -304,7 +363,7 @@ function MainAppView({
 
   const getGoalProgress = (g: any) => g.status === '성공' ? 100 : g.status === '실패' ? 0 : (g.progress || 0);
 
-  const dynamicOverallProgress = goals.length > 0 ? Math.floor((goals.filter((g: any) => g.status === '성공').length / goals.length) * 100) : 0;
+  const dynamicOverallProgress = (goals || []).length > 0 ? Math.floor(((goals || []).filter((g: any) => g.status === '성공').length / (goals || []).length) * 100) : 0;
 
   const renderItemRow = (t: any) => {
     const id = t.todoId || t.id || t.todo_id;
@@ -337,7 +396,7 @@ function MainAppView({
   const renderTabContent = () => {
     switch(activeTab) {
       case 'todo': 
-        const regularTodos = filteredTodos;
+        const regularTodos = filteredTodos || [];
         const totalMissions = (todos || []).length + (backendRoutines || []).length;
         const doneTodos = (todos || []).filter((t:any) => t.isCompleted === true || t.completed === true || t.done === true).length;
         const doneRoutines = (backendRoutines || []).filter((r:any) => r.isCompleted === true).length;
@@ -348,9 +407,9 @@ function MainAppView({
         return (
           <>
             <div className="header-row">
-              <Menu size={22} className="cursor-pointer" color="#4e4b52" />
+              <Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} />
               <h3 className="header-title">할 일 <span style={{fontSize:'13px', color:'#6c63ff', marginLeft:'8px'}}>{calMonth}/{selectedCalendarDay}</span></h3>
-              <Bell size={22} className="cursor-pointer" color="#4e4b52" />
+              <Bell size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenNoti} />
             </div>
             <div className="filter-tabs" style={{ marginBottom: '24px' }}>
               <button className={`chip ${todoFilter === 'all' ? 'active' : ''}`} onClick={() => setTodoFilter('all')}>전체</button>
@@ -376,14 +435,14 @@ function MainAppView({
               }
 
               <div style={{ display: 'flex', alignItems: 'center', margin: '32px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#6c63ff' }}>
-                <span style={{ color: '#6c63ff', marginRight: '6px' }}>🔄</span> 반복 루틴 ({backendRoutines?.length || 0}개)
+                <span style={{ color: '#6c63ff', marginRight: '6px' }}>🔄</span> 반복 루틴 ({(backendRoutines || []).length}개)
               </div>
               {!backendRoutines || backendRoutines.length === 0 ? (
                 <div style={{ fontSize: '13px', color: '#b5b1bc', textAlign: 'center', padding: '24px 0', borderRadius: '16px', border: '1px dashed #e0dcfc' }}>루틴 기록이 비어있습니다.</div>
               ) : (
                 backendRoutines.map((r: any) => {
-                  const id = r.routineId; 
-                  const title = r.title;
+                  const id = r.routineId || r.id; 
+                  const title = r.title || '알 수 없는 루틴';
                   const isDone = r.isCompleted === true;
                   
                   let pText = '높음'; let pClass = 'badge-high';
@@ -417,7 +476,7 @@ function MainAppView({
         const allMissionsForDay = [...(todos || []), ...(backendRoutines || [])];
         return (
           <>
-            <div className="header-row"><Menu size={22} className="cursor-pointer" /><h3 className="header-title">달력</h3><Bell size={22} color="#4e4b52" /></div>
+            <div className="header-row"><Menu size={22} className="cursor-pointer" onClick={onOpenMenu} /><h3 className="header-title">달력</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
             <div className="scroll-content">
               <div style={{ background: '#fbfbff', border: '1px solid #f1f0f5', borderRadius: '24px', padding: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -444,8 +503,8 @@ function MainAppView({
               </div>
               <div style={{ marginTop: '16px', fontWeight: '700' }}>{calMonth}월 {selectedCalendarDay}일 미션 목록 ({allMissionsForDay.length}개)</div>
               {allMissionsForDay.map((t: any) => (
-                <div key={t.id || t.routineId || t.todoId} className="list-item" style={{ background: '#fff', padding: '12px 16px', marginBottom: '8px' }}>
-                  <span style={{ fontWeight: '600', fontSize: '14px' }}>{t.title}</span>
+                <div key={`cal-item-${t.id || t.routineId || t.todoId || Math.random()}`} className="list-item" style={{ background: '#fff', padding: '12px 16px', marginBottom: '8px' }}>
+                  <span style={{ fontWeight: '600', fontSize: '14px' }}>{t.title || '제목 없음'}</span>
                 </div>
               ))}
             </div>
@@ -453,7 +512,6 @@ function MainAppView({
         );
 
       case 'goal': 
-        // 🌟 '실패' 필터 포함하여 로직 업데이트
         const filteredGoals = (goals || []).filter((g:any) => {
           if (goalFilter === 'active') return g.status === '진행중';
           if (goalFilter === 'success') return g.status === '성공';
@@ -463,9 +521,8 @@ function MainAppView({
 
         return (
           <>
-            <div className="header-row"><Menu size={22} className="cursor-pointer" color="#4e4b52" /><h3 className="header-title">목표</h3><Bell size={22} color="#4e4b52" /></div>
+            <div className="header-row"><Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} /><h3 className="header-title">목표</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
             
-            {/* 🌟 상단 탭 정렬 및 실패 추가 ('목표.png' 반영) */}
             <div className="filter-tabs" style={{ justifyContent: 'flex-start', gap: '8px', padding: '0 20px', marginBottom: '16px' }}>
               <button className={`chip ${goalFilter === 'all' ? 'active' : ''}`} style={goalFilter !== 'all' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setGoalFilter('all')}>전체</button>
               <button className={`chip ${goalFilter === 'active' ? 'active' : ''}`} style={goalFilter !== 'active' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setGoalFilter('active')}>진행중</button>
@@ -474,21 +531,24 @@ function MainAppView({
             </div>
 
             <div className="scroll-content">
-              {/* 🌟 '목표.png'와 동일한 남색 달성률 박스 디자인 */}
               <div className="dashboard-card" style={{ background: '#5b678c', color: 'white', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '24px' }}>
                 <span style={{ fontSize: '13px', fontWeight: '500', opacity: 0.9 }}>나의 전체 달성률</span>
                 <h2 style={{ fontSize: '32px', fontWeight: '800', margin: '8px 0 0 0' }}>{dynamicOverallProgress}%</h2>
               </div>
               
-              {/* 🌟 개별 목표 카드 디자인 개편 ('목표.png' 반영) */}
               {filteredGoals.map((g:any) => {
                 const isSuccess = g.status === '성공';
                 const isFail = g.status === '실패';
                 const statusColor = isSuccess ? '#28a745' : isFail ? '#dc3545' : '#6c63ff';
 
                 return (
-                  <div key={g.id} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', padding: '20px', background: '#fff', borderRadius: '20px', marginBottom: '16px', border: '1px solid #f1f0f5', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }} 
-                       onClick={() => { setSelectedGoalId(g.id); setResultType(isSuccess ? 'success' : isFail ? 'fail' : null); setShowGoalResult(true); }}>
+                  <div key={`goal-${g.id}`} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', padding: '20px', background: '#fff', borderRadius: '20px', marginBottom: '16px', border: '1px solid #f1f0f5', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }} 
+                       onClick={() => { 
+                         setSelectedGoalId(g.id); 
+                         setResultType(isSuccess ? 'success' : isFail ? 'fail' : null); 
+                         setFailReasons(g.reason ? g.reason.split(',').map((r: string) => r.trim()) : []);
+                         setShowGoalResult(true); 
+                       }}>
                     
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                       <span style={{ fontSize: '16px', fontWeight: '700', color: '#1a191b' }}>{g.title}</span>
@@ -510,17 +570,14 @@ function MainAppView({
         );
 
       case 'stats': 
-        // 🌟 주간, 월간, 연간 필터에 따른 동적 데이터 (실제 목표 데이터 연동)
         let chartData: { label: string; rate: number }[] = [];
         
-        // 현재 선택된 달력 날짜(globalDate)를 기준으로 연/월 계산
-        const [bYear, bMonthStr, bDayStr] = globalDate.split('-');
-        const currentYear = parseInt(bYear);
-        const currentMonth = parseInt(bMonthStr) - 1; // 0~11 (자바스크립트 달력 규칙)
+        const [bYear, bMonthStr, bDayStr] = (globalDate || getTodayStr()).split('-');
+        const currentYear = parseInt(bYear || '2026');
+        const currentMonth = parseInt(bMonthStr || '1') - 1; 
 
-        // 💡 헬퍼 함수: 특정 기간에 마감일(endDate)이 속한 목표들의 성공률 계산
         const calculateRate = (filterFn: (y: number, m: number, d: number, fullDate: string) => boolean) => {
-          const matchedGoals = goals.filter((g: any) => {
+          const matchedGoals = (goals || []).filter((g: any) => {
             if (!g.endDate) return false;
             const [gy, gm, gd] = g.endDate.split('-').map(Number);
             return filterFn(gy, gm - 1, gd, g.endDate);
@@ -530,10 +587,9 @@ function MainAppView({
         };
 
         if (statsPeriod === 'week') {
-          // 1. 주간: 현재 선택된 날짜가 포함된 주의 월~일요일
-          const base = new Date(currentYear, currentMonth, parseInt(bDayStr));
+          const base = new Date(currentYear, currentMonth, parseInt(bDayStr || '1'));
           const day = base.getDay();
-          const diff = base.getDate() - day + (day === 0 ? -6 : 1); // 월요일 찾기
+          const diff = base.getDate() - day + (day === 0 ? -6 : 1); 
           const monday = new Date(base.setDate(diff));
 
           const weekLabels = ['월', '화', '수', '목', '금', '토', '일'];
@@ -544,7 +600,6 @@ function MainAppView({
           });
 
         } else if (statsPeriod === 'month') {
-          // 2. 월간: 현재 월을 7일 단위로 1~5주차 분할
           const monthLabels = ['1주차', '2주차', '3주차', '4주차', '5주차'];
           chartData = monthLabels.map((label, index) => {
             const startDay = index * 7 + 1;
@@ -556,17 +611,24 @@ function MainAppView({
           });
 
         } else if (statsPeriod === 'year') {
-          // 3. 연간: 현재 연도의 1~12월
           const yearLabels = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
           chartData = yearLabels.map((label, index) => {
             return { label, rate: calculateRate((y, m) => y === currentYear && m === index) };
           });
         }
 
-        const failedGoals = goals.filter((g: any) => g.status === '실패');
+        const failedGoals = (goals || []).filter((g: any) => g.status === '실패');
         const totalFailed = failedGoals.length;
         const counts: Record<string, number> = { '⏱️ 시간 부족': 0, '🎯 동기 부족': 0, '🔋 체력 저하': 0, '📅 계획 오류': 0, '🌍 외부 요인': 0 };
-        failedGoals.forEach((g: any) => { if (g.reason && counts[g.reason] !== undefined) counts[g.reason]++; });
+        
+        failedGoals.forEach((g: any) => { 
+          if (g.reason) {
+            const reasonsArray = g.reason.split(',').map((r: string) => r.trim());
+            reasonsArray.forEach((r: string) => {
+              if (counts[r] !== undefined) counts[r]++;
+            });
+          } 
+        });
 
         const dynamicFailData = Object.keys(counts).map(name => ({
           name,
@@ -578,7 +640,7 @@ function MainAppView({
 
         return (
           <>
-            <div className="header-row"><Menu size={22} className="cursor-pointer" color="#4e4b52" /><h3 className="header-title">통계</h3><div style={{width: 24}}></div></div>
+            <div className="header-row"><Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} /><h3 className="header-title">통계</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
             <div className="filter-tabs" style={{ padding: '0 20px', marginBottom: '8px' }}>
               <button className={`chip ${statsPeriod === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
               <button className={`chip ${statsPeriod === 'month' ? 'active' : ''}`} onClick={() => setStatsPeriod('month')}>월간</button>
@@ -587,7 +649,6 @@ function MainAppView({
             <div className="scroll-content">
               <div style={{ fontSize: '14px', fontWeight: '700', marginLeft: '4px' }}>달성 추이</div>
               
-              {/* 🌟 차트 레이아웃 동적 렌더링 */}
               <div style={{ height: '180px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '20px 12px 10px', background: '#fff', border: '1px solid #f1f0f5', borderRadius: '18px', marginTop: '12px' }}>
                 {chartData.map((item: any, idx: number) => {
                   const barWidth = statsPeriod === 'year' ? '12px' : statsPeriod === 'month' ? '30px' : '20px';
@@ -623,7 +684,6 @@ function MainAppView({
     <div className="card" style={{ paddingBottom: '80px' }}>
       {renderTabContent()}
       
-      {/* 🌟 하단 네비게이션에서 '친구' 제거 (4개 탭 유지) */}
       <div className="bottom-nav" style={{ justifyContent: 'space-around' }}>
         <div className={`nav-item ${activeTab === 'todo' ? 'active' : ''}`} onClick={() => setActiveTab('todo')}><ClipboardList size={22} /><span>할 일</span></div>
         <div className={`nav-item ${activeTab === 'calendar' ? 'active' : ''}`} onClick={() => setActiveTab('calendar')}><Calendar size={22} /><span>달력</span></div>
@@ -643,10 +703,18 @@ function MainAppView({
 
             {resultType === 'fail' && (
               <div style={{ marginTop: '16px', textAlign: 'left' }}>
-                <label style={{ fontSize: '13px', fontWeight: '700', color: '#4e4b52', display: 'block', marginBottom: '8px' }}>실패 사유 선택</label>
+                <label style={{ fontSize: '13px', fontWeight: '700', color: '#4e4b52', display: 'block', marginBottom: '8px' }}>실패 사유 다중 선택</label>
                 <div className="filter-tabs" style={{ flexWrap: 'wrap', gap: '6px', padding: 0 }}>
                   {['⏱️ 시간 부족', '🎯 동기 부족', '🔋 체력 저하', '📅 계획 오류', '🌍 외부 요인'].map((reason) => (
-                    <button key={reason} className={`chip ${failReason === reason ? 'active' : ''}`} onClick={() => setFailReason(reason)}>{reason}</button>
+                    <button 
+                      key={reason} 
+                      className={`chip ${failReasons.includes(reason) ? 'active' : ''}`} 
+                      onClick={() => {
+                        setFailReasons(prev => prev.includes(reason) ? prev.filter(r => r !== reason) : [...prev, reason]);
+                      }}
+                    >
+                      {reason}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -654,7 +722,8 @@ function MainAppView({
 
             <button className="primary-button" style={{ marginTop: '20px' }} onClick={() => {
               if(selectedGoalId) {
-                onUpdateGoalStatus(selectedGoalId, resultType === 'success' ? '성공' : '실패', resultType === 'success' ? 100 : 0, resultType === 'fail' ? failReason : '');
+                const reasonString = resultType === 'fail' ? failReasons.join(',') : '';
+                onUpdateGoalStatus(selectedGoalId, resultType === 'success' ? '성공' : '실패', resultType === 'success' ? 100 : 0, reasonString);
               }
               setShowGoalResult(false);
             }}>변동 사항 반영 저장</button>
@@ -668,23 +737,56 @@ function MainAppView({
 function App() {
   const [view, setView] = useState<string>('login');
   const [activeTab, setActiveTab] = useState<string>('todo'); 
-
   const [globalDate, setGlobalDate] = useState<string>(getTodayStr());
-
+  
+  // 🌟 안전장치 초기값 적용
   const [todos, setTodos] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
   const [backendRoutines, setBackendRoutines] = useState<any[]>([]);
   
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [userProfile, setUserProfile] = useState<{name: string, email: string}>({ name: '사용자', email: '이메일 없음' });
+
+  const [notiFilter, setNotiFilter] = useState<string>('all');
+  const [notifications, setNotifications] = useState([
+    { id: 1, type: 'todo', title: '할 일 마감 임박', desc: '프로젝트 보고서 마감이 1시간 남았습니다', time: '1시간 전', unread: true, dateGroup: '오늘', icon: '📊' },
+    { id: 2, type: 'goal', title: '목표 달성!', desc: '영어 공부 목표를 달성했습니다', time: '3시간 전', unread: true, dateGroup: '오늘', icon: '🎉' }
+  ]);
+
+  // 🌟 1. 프로필 안전 조회
+  const fetchUserProfile = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${BASE_URL}/api/users/me`, {
+        headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUserProfile({ 
+          name: data?.name || data?.nickname || '사용자', 
+          email: data?.email || '이메일 없음' 
+        });
+      }
+    } catch (e) { 
+      console.error("프로필 로딩 실패", e); 
+    }
+  };
+
+  // 🌟 2. 할 일 안전 조회 (배열 검증)
   const fetchTodos = async () => {
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${BASE_URL}/api/todos?date=${globalDate}`, {
         headers: { 'Authorization': token ? `Bearer ${token}` : '' }
       });
-      if (response.ok) setTodos(await response.json());
-    } catch (e) { console.error(e); }
+      if (response.ok) {
+        const data = await response.json();
+        setTodos(Array.isArray(data) ? data : []); // 배열 형태가 아니면 빈 배열 강제 할당
+      }
+    } catch (e) { console.error("할일 로딩 실패", e); }
   };
 
+  // 🌟 3. 목표 안전 조회 (배열 검증)
   const fetchGoals = async () => {
     const token = localStorage.getItem('token');
     try {
@@ -693,30 +795,39 @@ function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        if(data && data.length > 0) setGoals(data);
+        setGoals(Array.isArray(data) ? data : []); // 배열 형태가 아니면 빈 배열 강제 할당
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("목표 로딩 실패", e); }
   };
 
+  // 🌟 4. 루틴 안전 조회 (배열 검증)
   const fetchBackendRoutines = async () => {
     const token = localStorage.getItem('token');
     try {
       const routineRes = await fetch(`${BASE_URL}/api/routines/list?date=${globalDate}`, {
         headers: { 'Authorization': token ? `Bearer ${token}` : '' }
       });
-      let routines = [];
-      if (routineRes.ok) routines = await routineRes.json();
+      
+      let routines: any[] = [];
+      if (routineRes.ok) {
+        const rData = await routineRes.json();
+        if (Array.isArray(rData)) routines = rData;
+      }
 
       const recordRes = await fetch(`${BASE_URL}/api/records?date=${globalDate}`, {
         headers: { 'Authorization': token ? `Bearer ${token}` : '' }
       });
-      let records = [];
-      if (recordRes.ok) records = await recordRes.json();
+      
+      let records: any[] = [];
+      if (recordRes.ok) {
+        const recData = await recordRes.json();
+        if (Array.isArray(recData)) records = recData;
+      }
 
       const mergedRoutines = routines.map((routine: any) => {
-        const rId = routine.routineId || routine.id || routine.routine_id;
+        const rId = routine?.routineId || routine?.id || routine?.routine_id;
         const matchedRecord = records.find((rec: any) => {
-            const recRId = rec.routineId || rec.routine?.routineId || rec.routine?.id || rec.routine_id;
+            const recRId = rec?.routineId || rec?.routine?.routineId || rec?.routine?.id || rec?.routine_id;
             return recRId === rId;
         });
         
@@ -733,7 +844,7 @@ function App() {
       });
 
       setBackendRoutines(mergedRoutines);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("루틴 로딩 실패", e); }
   };
 
   const handleToggleTodo = async (id: number) => {
@@ -766,13 +877,10 @@ function App() {
       if (response.ok) {
         fetchBackendRoutines();
       } else {
-        const text = await response.text().catch(() => '');
-        console.error('루틴 삭제 실패', response.status, text);
-        alert(`루틴 삭제에 실패했습니다. (status: ${response.status})`);
+        alert('루틴 삭제에 실패했습니다.');
       }
     } catch (error) {
       console.error(error);
-      alert('루틴 삭제 중 네트워크 오류가 발생했습니다.');
     }
   };
 
@@ -803,30 +911,23 @@ function App() {
     } catch { }
   };
 
-const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
-  const token = localStorage.getItem('token');
-  try {
-    const response = await fetch(`${BASE_URL}/api/goals/${id}/status`, {
-      method: 'PATCH', // 백엔드가 @PatchMapping일 경우 PATCH로 통일
-      headers: { 
-        'Content-Type': 'application/json', 
-        'Authorization': token ? `Bearer ${token}` : '' 
-      }, 
-      body: JSON.stringify({ status, progress, reason })
-    });
-    
-    if (response.ok) {
-      // 통신 성공 시 서버에서 최신 목록을 다시 불러옴
-      fetchGoals(); 
-    } else {
-      // 통신 실패 시 화면을 바꾸지 않고 경고창 띄우기
-      alert('목표 상태 업데이트에 실패했습니다.');
+  const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${BASE_URL}/api/goals/${id}/status`, {
+        method: 'PATCH', 
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': token ? `Bearer ${token}` : '' 
+        }, 
+        body: JSON.stringify({ status, progress, reason })
+      });
+      
+      if (response.ok) fetchGoals(); 
+    } catch (error) {
+      console.error('서버 통신 에러:', error);
     }
-  } catch (error) {
-    console.error('서버 통신 에러:', error);
-    alert('서버와 연결할 수 없습니다.');
-  }
-};
+  };
 
   const handleDeleteGoal = async (id: number) => {
     const token = localStorage.getItem('token');
@@ -850,42 +951,132 @@ const handleUpdateGoalStatus = async (id: number, status: string, progress: numb
     }
   };
 
+  const handleLogout = () => {
+    if (confirm('로그아웃 하시겠습니까?')) {
+      localStorage.removeItem('token'); 
+      setView('login');
+      setIsSidebarOpen(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (confirm('정말로 회원 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await fetch(`${BASE_URL}/api/users`, { 
+          method: 'DELETE',
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+        if (response.ok) {
+          alert('회원 탈퇴가 완료되었습니다.');
+          localStorage.removeItem('token');
+          setView('login');
+          setIsSidebarOpen(false);
+        } else {
+          alert('회원 탈퇴에 실패했습니다.');
+        }
+      } catch (error) {
+        console.error(error);
+        alert('서버와 통신할 수 없습니다.');
+      }
+    }
+  };
+
   useEffect(() => {
     if (view === 'main') {
+      fetchUserProfile(); 
       fetchBackendRoutines();
       fetchTodos();
       fetchGoals();
     }
   }, [view, globalDate]);
 
-  const [todoFilter, setTodoFilter] = useState<string>('all');
+  
+const [todoFilter, setTodoFilter] = useState<string>('all');
   const [goalFilter, setGoalFilter] = useState<string>('all');
   const [statsPeriod, setStatsPeriod] = useState<string>('week');
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
   const [showGoalResult, setShowGoalResult] = useState<boolean>(false);
   const [resultType, setResultType] = useState<'success' | 'fail' | null>(null);
 
+
   return (
     <div className="container">
       {view === 'login' && <LoginView setView={setView} />}
       {view === 'register' && <RegisterView setView={setView} />}
       {view === 'error' && <ErrorView setView={setView} />}
-      {view === 'main' && (
-        <MainAppView
-          setView={setView} activeTab={activeTab} setActiveTab={setActiveTab}
-          todos={todos} setTodoFilter={setTodoFilter} todoFilter={todoFilter}
-          goals={goals} setGoalFilter={setGoalFilter} goalFilter={goalFilter}
-          statsPeriod={statsPeriod} setStatsPeriod={setStatsPeriod}
-          setSelectedGoalId={setSelectedGoalId} selectedGoalId={selectedGoalId}
-          setResultType={setResultType} setShowGoalResult={setShowGoalResult}
-          showGoalResult={showGoalResult} resultType={resultType}
-          backendRoutines={backendRoutines} 
-          onToggleBackendRoutine={handleToggleBackendRoutine}
-          onDeleteTodo={handleDeleteTodo} onDeleteRoutine={handleDeleteRoutine} 
-          onToggleTodo={handleToggleTodo} 
-          onUpdateGoalStatus={handleUpdateGoalStatus} onDeleteGoal={handleDeleteGoal}
-          globalDate={globalDate} setGlobalDate={setGlobalDate}
+      
+      {view === 'noti' && (
+        <NotiView 
+          setView={setView} 
+          notifications={notifications} 
+          setNotifications={setNotifications} 
+          notiFilter={notiFilter} 
+          setNotiFilter={setNotiFilter} 
         />
+      )}
+      
+      {view === 'main' && (
+        <>
+          <MainAppView
+            setView={setView} activeTab={activeTab} setActiveTab={setActiveTab}
+            todos={todos} setTodoFilter={setTodoFilter} todoFilter={todoFilter}
+            goals={goals} setGoalFilter={setGoalFilter} goalFilter={goalFilter}
+            statsPeriod={statsPeriod} setStatsPeriod={setStatsPeriod}
+            setSelectedGoalId={setSelectedGoalId} selectedGoalId={selectedGoalId}
+            setResultType={setResultType} setShowGoalResult={setShowGoalResult}
+            showGoalResult={showGoalResult} resultType={resultType}
+            backendRoutines={backendRoutines} 
+            onToggleBackendRoutine={handleToggleBackendRoutine}
+            onDeleteTodo={handleDeleteTodo} onDeleteRoutine={handleDeleteRoutine} 
+            onToggleTodo={handleToggleTodo} 
+            onUpdateGoalStatus={handleUpdateGoalStatus} onDeleteGoal={handleDeleteGoal}
+            globalDate={globalDate} setGlobalDate={setGlobalDate}
+            onOpenNoti={() => setView('noti')} 
+            onOpenMenu={() => setIsSidebarOpen(true)} 
+          />
+          
+          {isSidebarOpen && (
+            <>
+              <div 
+                className="bottom-sheet-overlay" 
+                onClick={() => setIsSidebarOpen(false)} 
+                style={{ zIndex: 999 }}
+              ></div>
+              <div style={{
+                position: 'fixed', top: 0, left: 0, bottom: 0, width: '280px', background: '#fff',
+                zIndex: 1000, display: 'flex', flexDirection: 'column', padding: '32px 24px',
+                boxShadow: '2px 0 12px rgba(0,0,0,0.1)', animation: 'slideRight 0.3s forwards'
+              }}>
+                
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '32px' }}>
+                  <div style={{ width: '48px', height: '48px', background: '#e9e7ff', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', marginRight: '16px' }}>
+                    <User size={24} color="#6c63ff" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '16px', fontWeight: '700', color: '#1a191b' }}>{userProfile.name}</div>
+                    <div style={{ fontSize: '13px', color: '#b5b1bc' }}>{userProfile.email}</div>
+                  </div>
+                </div>
+
+                <div className="cursor-pointer" 
+                     style={{ background: '#f5f4ff', color: '#6c63ff', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '14px', marginBottom: 'auto' }}
+                     onClick={() => alert(`[회원 세부 정보]\n- 이메일 주소: ${userProfile.email}\n- 가입 닉네임: ${userProfile.name}\n\n목표 및 반복 루틴 데이터 관리 시스템`)}>
+                  <User size={18} style={{ marginRight: '12px' }} /> 내 정보 보기
+                </div>
+
+                <div style={{ marginTop: 'auto' }}>
+                  <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: '#1a191b' }} onClick={handleLogout}>
+                    <LogOut size={20} style={{ marginRight: '16px' }} /> 로그아웃
+                  </div>
+                  <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: '#ff4d4d' }} onClick={handleDeleteAccount}>
+                    <Trash2 size={20} style={{ marginRight: '16px' }} /> 회원 탈퇴
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </>
       )}
       {view === 'todo-add' && <TodoAddView setView={setView} onAddTodo={handleAddTodo} globalDate={globalDate} />}
       {view === 'goal-add' && <GoalAddView setView={setView} onAddGoal={handleAddGoal} globalDate={globalDate} />}
