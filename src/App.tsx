@@ -3,7 +3,7 @@ import {
   Mail, Lock, Eye, ChevronLeft, Flag, Bell, 
   CheckCircle2, Circle, MoreVertical, 
   Plus, Calendar, BarChart2, ClipboardList,
-  AlertCircle, RotateCcw, X, Check, Menu, Trash2, LogOut, User 
+  AlertCircle, RotateCcw, X, Check, Menu, Trash2, LogOut, User, Pencil
 } from 'lucide-react';
 import './App.css';
 
@@ -18,6 +18,20 @@ const getTodayStr = () => {
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+const getNotified = (): string[] => {
+  try { return JSON.parse(localStorage.getItem('notifiedIds') || '[]'); } catch { return []; }
+};
+
+const showDeviceNotification = async (title: string, body: string) => {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) { reg.showNotification(title, { body, icon: '/pwa-192x192.png' }); return; }
+  } catch { /* 아래로 이동 */ }
+  new Notification(title, { body, icon: '/pwa-192x192.png' });
+};
+
 
 function LoginView({ setView }: { setView: SetView }) {
   const [email, setEmail] = useState(''); 
@@ -156,6 +170,7 @@ function ErrorView({ setView }: { setView: SetView }) {
 }
 
 function NotiView({ setView, notifications, setNotifications, notiFilter, setNotiFilter }: any) {
+  const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
   const filteredNoti = (notifications || []).filter((n: any) => notiFilter === 'unread' ? n.unread : true);
   const unreadCount = (notifications || []).filter((n: any) => n.unread).length;
 
@@ -176,7 +191,17 @@ function NotiView({ setView, notifications, setNotifications, notiFilter, setNot
       </div>
 
       <div className="scroll-content">
-        <div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>오늘</div>
+        {perm !== 'granted' && typeof Notification !== 'undefined' && (
+  <button className="primary-button" style={{ marginBottom: '16px' }} onClick={async () => {
+    const result = await Notification.requestPermission();
+    setPerm(result);
+    if (result !== 'granted') alert('브라우저 설정에서 이 사이트의 알림을 허용해주세요.');
+  }}>🔔 기기 알림 켜기</button>
+)}
+<div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>오늘</div>
+{filteredNoti.length === 0 && (
+  <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>새 알림이 없습니다.</p>
+)}
         
         {filteredNoti.map((n: any) => (
           <div key={n.id} 
@@ -214,107 +239,131 @@ function NotiView({ setView, notifications, setNotifications, notiFilter, setNot
   );
 }
 
-function TodoAddView({ setView, onAddTodo, globalDate }: any) {
-  const [title, setTitle] = useState('');
-  const [memo, setMemo] = useState('');
-  const [date, setDate] = useState(globalDate);
-  const [time, setTime] = useState('14:00');
-  const [priority, setPriority] = useState('high');
-  const [type, setType] = useState('todo');
+function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editingItem, editingKind, globalDate }: any) {
+  const isEdit = !!editingItem;
+  const isRoutineEdit = isEdit && editingKind === 'routine';
+
+  const [title, setTitle] = useState(editingItem?.title || '');
+  const [memo, setMemo] = useState(editingItem?.description || '');
+  const [date, setDate] = useState(editingItem?.todoDate || globalDate);
+  const [time, setTime] = useState(editingItem?.todoTime ? String(editingItem.todoTime).slice(0, 5) : '14:00');
+  const [priority, setPriority] = useState(
+    editingItem?.priority === 'LOW' ? 'low' : editingItem?.priority === 'MEDIUM' ? 'normal' : 'high'
+  );
+  const [type, setType] = useState(isRoutineEdit ? 'routine' : 'todo');
+
+  const handleSave = () => {
+    if (!title.trim()) return alert('제목을 입력하세요.');
+    if (isRoutineEdit) onUpdateRoutine(editingItem, title, memo);
+    else if (isEdit) onUpdateTodo(editingItem.todoId || editingItem.id, title, memo, date, time, priority);
+    else onAddTodo(title, memo, date, time, priority, type);
+    setView('main');
+  };
 
   return (
     <div className="card">
       <div className="header-row">
         <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
-        <h3 className="header-title">할 일 / 루틴 추가</h3>
-        <span className="text-link" onClick={() => {
-          if (!title.trim()) return alert('제목을 입력하세요.');
-          onAddTodo(title, memo, date, time, priority, type);
-          setView('main');
-        }}>저장</span>
+        <h3 className="header-title">{isEdit ? (isRoutineEdit ? '루틴 수정' : '할 일 수정') : '할 일 / 루틴 추가'}</h3>
+        <span className="text-link" onClick={handleSave}>저장</span>
       </div>
       <div className="scroll-content">
-        <div style={{ marginBottom: '16px' }}>
-          <div className="filter-tabs">
-            <button className={`chip ${type === 'todo' ? 'active' : ''}`} onClick={() => setType('todo')}>📌 일반 할 일</button>
-            <button className={`chip ${type === 'routine' ? 'active' : ''}`} onClick={() => setType('routine')}>🔄 반복 루틴</button>
+        {!isEdit && (
+          <div style={{ marginBottom: '16px' }}>
+            <div className="filter-tabs">
+              <button className={`chip ${type === 'todo' ? 'active' : ''}`} onClick={() => setType('todo')}>📌 일반 할 일</button>
+              <button className={`chip ${type === 'routine' ? 'active' : ''}`} onClick={() => setType('routine')}>🔄 반복 루틴</button>
+            </div>
           </div>
+        )}
+        <input style={{ fontSize: '18px', fontWeight: '700', border: 'none', width: '100%' }} placeholder="내용을 입력하세요" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <div className="input-group" style={{ marginTop: '12px' }}>
+          <label>📝 메모</label>
+          <input placeholder="메모 (선택)" value={memo} onChange={(e) => setMemo(e.target.value)} />
         </div>
-        <input style={{ fontSize: '18px', fontWeight: '700', border: 'none', width: '100%' }} placeholder="내용을 입력하세요" value={title} onChange={(e)=>setTitle(e.target.value)} />
-        <div className="input-group" style={{ marginTop: '12px' }}><label>📅 날짜 지정</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} /></div>
-        <div className="input-group"><label>🕒 시간 지정</label><input type="time" value={time} onChange={(e)=>setTime(e.target.value)} /></div>
-        <div className="filter-tabs" style={{ marginTop: '12px' }}>
-          {['high', 'normal', 'low'].map(p => (
-            <button key={p} className={`chip ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
-              {p === 'high' ? '높음' : p === 'normal' ? '보통' : '낮음'}
-            </button>
-          ))}
-        </div>
+        {!isRoutineEdit && (
+          <>
+            <div className="input-group"><label>📅 날짜 지정</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+            <div className="input-group"><label>🕒 시간 지정</label><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
+            <div className="filter-tabs" style={{ marginTop: '12px' }}>
+              {['high', 'normal', 'low'].map(p => (
+                <button key={p} className={`chip ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
+                  {p === 'high' ? '높음' : p === 'normal' ? '보통' : '낮음'}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-function GoalAddView({ setView, onAddGoal, globalDate }: any) {
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('운동');
-  const [desc, setDesc] = useState('');
-  const [startDate, setStartDate] = useState(globalDate);
-  const [endDate, setEndDate] = useState(globalDate);
+function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate }: any) {
+  const isEdit = !!editingGoal;
+  const [title, setTitle] = useState(editingGoal?.title || '');
+  const [category, setCategory] = useState(editingGoal?.category || '운동');
+  const [desc, setDesc] = useState(editingGoal?.desc || editingGoal?.description || '');
+  const [startDate, setStartDate] = useState(editingGoal?.startDate || globalDate);
+  const [endDate, setEndDate] = useState(editingGoal?.endDate || globalDate);
   const [reminder, setReminder] = useState(false);
+
+  const handleSave = () => {
+    if (!title.trim()) return alert('목표를 입력하세요.');
+    if (endDate < startDate) return alert('마감일은 시작일 이후여야 합니다.');
+    if (isEdit) onUpdateGoal(editingGoal, title, category, desc, startDate, endDate);
+    else onAddGoal(title, category, desc, startDate, endDate);
+    setView('main');
+  };
 
   return (
     <div className="card">
       <div className="header-row">
         <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
-        <h3 className="header-title">목표 추가</h3>
-        <span className="text-link" onClick={() => {
-          if(!title.trim()) return alert('목표를 입력하세요.');
-          onAddGoal(title, category, desc, startDate, endDate);
-          setView('main');
-        }}>저장</span>
+        <h3 className="header-title">{isEdit ? '목표 수정' : '목표 추가'}</h3>
+        <span className="text-link" onClick={handleSave}>저장</span>
       </div>
       <div className="scroll-content">
         <div style={{ background: '#f5f4ff', color: '#6c63ff', padding: '24px', borderRadius: '16px', textAlign: 'center', fontWeight: 'bold', marginBottom: '20px' }}>
-          새로운 도전을 시작해보세요
+          {isEdit ? '목표를 수정해보세요' : '새로운 도전을 시작해보세요'}
         </div>
 
         <div className="input-group">
           <label>목표 제목</label>
-          <input placeholder="예: 매일 30분 조깅하기" value={title} onChange={(e)=>setTitle(e.target.value)} />
+          <input placeholder="예: 매일 30분 조깅하기" value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
-        
+
         <div className="input-group">
           <label>카테고리</label>
-          <select value={category} onChange={(e)=>setCategory(e.target.value)}>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option>운동</option><option>공부</option><option>독서</option><option>기타</option>
           </select>
         </div>
-        
+
         <div className="input-group">
           <label>목표 내용 / 설명</label>
-          <textarea 
-            placeholder="목표에 대한 상세한 내용을 적어주세요..." 
-            value={desc} 
-            onChange={(e)=>setDesc(e.target.value)}
+          <textarea
+            placeholder="목표에 대한 상세한 내용을 적어주세요..."
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
             style={{ width: '100%', padding: '12px', border: '1px solid #e5e4e7', borderRadius: '12px', minHeight: '80px', resize: 'none' }}
           />
         </div>
-        
+
         <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
           <div className="input-group" style={{ flex: 1, marginBottom: 0 }}>
             <label>시작일</label>
-            <input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} />
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className="input-group" style={{ flex: 1, marginBottom: 0 }}>
             <label>목표일 (마감일)</label>
-            <input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} />
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '16px', border: '1px solid #f1f0f5', borderRadius: '16px' }}>
           <span style={{ fontWeight: '600', fontSize: '14px', color: '#333' }}>⏰ 리마인더 알림 설정</span>
-          <div 
+          <div
             className="cursor-pointer"
             onClick={() => setReminder(!reminder)}
             style={{ width: '44px', height: '24px', background: reminder ? '#6c63ff' : '#e5e4e7', borderRadius: '12px', position: 'relative', transition: '0.2s' }}
@@ -334,7 +383,8 @@ function MainAppView({
   showGoalResult, resultType, backendRoutines, 
   onToggleBackendRoutine, onUpdateGoalStatus, onDeleteTodo, onDeleteGoal, onDeleteRoutine, onToggleTodo,
   globalDate, setGlobalDate,
-  onOpenNoti, onOpenMenu 
+  onOpenNoti, onOpenMenu,
+  onEditTodo, onEditRoutine, onEditGoal 
 }: any) {
   
   const [failReasons, setFailReasons] = useState<string[]>([]);
@@ -385,6 +435,7 @@ function MainAppView({
           </span>
           <span className={`priority-badge ${priorityClass}`}>{priorityText}</span>
         </div>
+        <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditTodo(t); }} />
         <MoreVertical size={20} className="cursor-pointer" color="#b5b1bc" onClick={(e) => { 
           e.stopPropagation(); 
           if (confirm('이 일정을 삭제하시겠습니까?')) onDeleteTodo(id); 
@@ -459,6 +510,7 @@ function MainAppView({
                         <span style={{ fontWeight: '600', textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>{title}</span>
                         <span className={`priority-badge ${pClass}`}>{pText}</span>
                       </div>
+                                            <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditRoutine(r); }} />
                       <MoreVertical size={20} className="cursor-pointer" color="#b5b1bc" onClick={(e) => { 
                         e.stopPropagation(); 
                         if (confirm('이 루틴을 삭제하시겠습니까?')) onDeleteRoutine(id); 
@@ -533,7 +585,7 @@ function MainAppView({
             <div className="scroll-content">
               <div className="dashboard-card" style={{ background: '#5b678c', color: 'white', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '24px' }}>
                 <span style={{ fontSize: '13px', fontWeight: '500', opacity: 0.9 }}>나의 전체 달성률</span>
-                <h2 style={{ fontSize: '32px', fontWeight: '800', margin: '8px 0 0 0' }}>{dynamicOverallProgress}%</h2>
+                <h2 style={{ fontSize: '32px', fontWeight: '800', margin: '8px 0 0 0', color: 'white' }}>{dynamicOverallProgress}%</h2>
               </div>
               
               {filteredGoals.map((g:any) => {
@@ -559,7 +611,10 @@ function MainAppView({
                       <span style={{ fontSize: '12px', color: '#b5b1bc', fontWeight: '500' }}>
                         {getGoalProgress(g)}% 달성 ({g.startDate || '2026-03-01'} ~ {g.endDate || '2026-03-31'})
                       </span>
-                      <Trash2 size={18} color="#ff4d4d" onClick={(e) => { e.stopPropagation(); if(confirm('삭제하시겠습니까?')) onDeleteGoal(g.id); }} />
+                      <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+  <Pencil size={18} color="#b5b1bc" onClick={(e) => { e.stopPropagation(); onEditGoal(g); }} />
+  <Trash2 size={18} color="#ff4d4d" onClick={(e) => { e.stopPropagation(); if(confirm('삭제하시겠습니까?')) onDeleteGoal(g.id); }} />
+</div>
                     </div>
                   </div>
                 );
@@ -721,6 +776,7 @@ function MainAppView({
             )}
 
             <button className="primary-button" style={{ marginTop: '20px' }} onClick={() => {
+              if (!resultType) return alert('성공 또는 실패를 선택해주세요.');
               if(selectedGoalId) {
                 const reasonString = resultType === 'fail' ? failReasons.join(',') : '';
                 onUpdateGoalStatus(selectedGoalId, resultType === 'success' ? '성공' : '실패', resultType === 'success' ? 100 : 0, reasonString);
@@ -735,7 +791,14 @@ function MainAppView({
 }
 
 function App() {
-  const [view, setView] = useState<string>('login');
+  const [view, setView] = useState<string>(localStorage.getItem('token') ? 'main' : 'login');
+    const [editingItem, setEditingItem] = useState<any>(null);
+  const [editingKind, setEditingKind] = useState<string | null>(null);
+  const [editingGoal, setEditingGoal] = useState<any>(null);
+
+  useEffect(() => {
+    if (view === 'main') { setEditingItem(null); setEditingKind(null); setEditingGoal(null); }
+  }, [view]);
   const [activeTab, setActiveTab] = useState<string>('todo'); 
   const [globalDate, setGlobalDate] = useState<string>(getTodayStr());
   
@@ -748,10 +811,7 @@ function App() {
   const [userProfile, setUserProfile] = useState<{name: string, email: string}>({ name: '사용자', email: '이메일 없음' });
 
   const [notiFilter, setNotiFilter] = useState<string>('all');
-  const [notifications, setNotifications] = useState([
-    { id: 1, type: 'todo', title: '할 일 마감 임박', desc: '프로젝트 보고서 마감이 1시간 남았습니다', time: '1시간 전', unread: true, dateGroup: '오늘', icon: '📊' },
-    { id: 2, type: 'goal', title: '목표 달성!', desc: '영어 공부 목표를 달성했습니다', time: '3시간 전', unread: true, dateGroup: '오늘', icon: '🎉' }
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   // 🌟 1. 프로필 안전 조회
   const fetchUserProfile = async () => {
@@ -951,6 +1011,49 @@ function App() {
     }
   };
 
+    const handleEditTodo = (t: any) => { setEditingItem(t); setEditingKind('todo'); setView('todo-add'); };
+  const handleEditRoutine = (r: any) => { setEditingItem(r); setEditingKind('routine'); setView('todo-add'); };
+  const handleEditGoal = (g: any) => { setEditingGoal(g); setView('goal-add'); };
+
+  const handleUpdateTodo = async (id: number, title: string, memo: string, date: string, time: string, priority: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${BASE_URL}/api/todos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
+        body: JSON.stringify({ title, description: memo, todoDate: date, todoTime: time.length === 5 ? time + ':00' : time, priority: priority === 'normal' ? 'MEDIUM' : priority.toUpperCase() })
+      });
+      if (response.ok) fetchTodos();
+      else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
+    } catch { alert('서버와 통신할 수 없습니다.'); }
+  };
+
+  const handleUpdateRoutine = async (r: any, title: string, memo: string) => {
+    const token = localStorage.getItem('token');
+    const id = r.routineId || r.id;
+    try {
+      const response = await fetch(`${BASE_URL}/api/routines/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
+        body: JSON.stringify({ title, description: memo, category: r.category || '기본', repeatDays: r.repeatDays || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] })
+      });
+      if (response.ok) fetchBackendRoutines();
+      else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
+    } catch { alert('서버와 통신할 수 없습니다.'); }
+  };
+
+  const handleUpdateGoal = async (g: any, title: string, category: string, desc: string, startDate: string, endDate: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${BASE_URL}/api/goals/${g.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
+        body: JSON.stringify({ title, category, desc, startDate, endDate, progress: g.progress ?? 0, status: g.status || '진행중', reason: g.reason || '' })
+      });
+      if (response.ok) fetchGoals();
+      else alert(`목표 수정에 실패했습니다. (오류 코드 ${response.status})`);
+    } catch { alert('서버와 통신할 수 없습니다.'); }
+  };
   const handleLogout = () => {
     if (confirm('로그아웃 하시겠습니까?')) {
       localStorage.removeItem('token'); 
@@ -981,6 +1084,83 @@ function App() {
       }
     }
   };
+
+  const checkReminders = async () => {
+  const token = localStorage.getItem('token');
+  const headers = { 'Authorization': token ? `Bearer ${token}` : '' };
+  const today = getTodayStr();
+  const now = new Date();
+  const timeLabel = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  const items: any[] = [];
+
+  try {
+    // 1) 오늘 할 일: 마감 30분 전 ~ 마감 후 1시간까지
+    const todoRes = await fetch(`${BASE_URL}/api/todos?date=${today}`, { headers });
+    if (todoRes.ok) {
+      const data = await todoRes.json();
+      if (Array.isArray(data)) {
+        data.forEach((t: any) => {
+          const done = t.isCompleted === true || t.completed === true || t.done === true;
+          if (done || !t.todoTime) return;
+          const [h, m] = String(t.todoTime).split(':').map(Number);
+          const due = new Date();
+          due.setHours(h, m, 0, 0);
+          const diffMin = Math.round((due.getTime() - now.getTime()) / 60000);
+          const id = t.todoId || t.id;
+          if (diffMin >= 0 && diffMin <= 30) {
+            items.push({ id: `todo-soon-${id}-${today}`, type: 'todo', icon: '⏰', unread: true, time: timeLabel,
+              title: '할 일 마감 임박', desc: `"${t.title}" 마감이 ${diffMin}분 남았습니다` });
+          } else if (diffMin < 0 && diffMin >= -60) {
+            items.push({ id: `todo-late-${id}-${today}`, type: 'todo', icon: '📊', unread: true, time: timeLabel,
+              title: '마감 시간이 지났어요', desc: `"${t.title}"을(를) 아직 완료하지 않았어요` });
+          }
+        });
+      }
+    }
+
+    // 2) 목표: 오늘이 마감일이거나 마감일이 지난 진행중 목표
+    const goalRes = await fetch(`${BASE_URL}/api/goals`, { headers });
+    if (goalRes.ok) {
+      const data = await goalRes.json();
+      if (Array.isArray(data)) {
+        data.forEach((g: any) => {
+          if (g.status !== '진행중' || !g.endDate) return;
+          if (g.endDate === today) {
+            items.push({ id: `goal-today-${g.id}-${today}`, type: 'goal', icon: '🎯', unread: true, time: timeLabel,
+              title: '목표 마감일이에요', desc: `"${g.title}" 목표의 마감일이 오늘입니다` });
+          } else if (g.endDate < today) {
+            items.push({ id: `goal-over-${g.id}`, type: 'goal', icon: '🚩', unread: true, time: timeLabel,
+              title: '목표 결과를 기록해주세요', desc: `"${g.title}" 목표의 마감일이 지났습니다` });
+          }
+        });
+      }
+    }
+  } catch (e) { console.error('알림 확인 실패', e); }
+
+  if (items.length === 0) return;
+
+  // 알림 화면 목록에 추가 (이미 있는 건 제외 → 읽음 상태 유지)
+  setNotifications((prev: any[]) => {
+    const ids = new Set(prev.map((n: any) => n.id));
+    const add = items.filter(i => !ids.has(i.id));
+    return add.length ? [...add, ...prev] : prev;
+  });
+
+  // 컴퓨터 알림 팝업 (한 번 보낸 건 다시 안 보냄)
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    const notified = getNotified();
+    items.filter(i => !notified.includes(i.id)).forEach(i => showDeviceNotification(i.title, i.desc));
+    localStorage.setItem('notifiedIds', JSON.stringify([...new Set([...notified, ...items.map(i => i.id)])].slice(-100)));
+  }
+};
+
+const isLoggedInView = view !== 'login' && view !== 'register' && view !== 'error';
+useEffect(() => {
+  if (!isLoggedInView) return;
+  checkReminders();
+  const timer = setInterval(checkReminders, 60000);
+  return () => clearInterval(timer);
+}, [isLoggedInView]);
 
   useEffect(() => {
     if (view === 'main') {
@@ -1033,7 +1213,8 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
             onUpdateGoalStatus={handleUpdateGoalStatus} onDeleteGoal={handleDeleteGoal}
             globalDate={globalDate} setGlobalDate={setGlobalDate}
             onOpenNoti={() => setView('noti')} 
-            onOpenMenu={() => setIsSidebarOpen(true)} 
+            onOpenMenu={() => setIsSidebarOpen(true)}
+            onEditTodo={handleEditTodo} onEditRoutine={handleEditRoutine} onEditGoal={handleEditGoal} 
           />
           
           {isSidebarOpen && (
@@ -1078,8 +1259,8 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
           )}
         </>
       )}
-      {view === 'todo-add' && <TodoAddView setView={setView} onAddTodo={handleAddTodo} globalDate={globalDate} />}
-      {view === 'goal-add' && <GoalAddView setView={setView} onAddGoal={handleAddGoal} globalDate={globalDate} />}
+            {view === 'todo-add' && <TodoAddView setView={setView} onAddTodo={handleAddTodo} onUpdateTodo={handleUpdateTodo} onUpdateRoutine={handleUpdateRoutine} editingItem={editingItem} editingKind={editingKind} globalDate={globalDate} />}
+      {view === 'goal-add' && <GoalAddView setView={setView} onAddGoal={handleAddGoal} onUpdateGoal={handleUpdateGoal} editingGoal={editingGoal} globalDate={globalDate} />}
     </div>
   );
 }
