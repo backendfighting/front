@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import './App.css';
 
-const BASE_URL = 'http://localhost:8080'
+const BASE_URL = import.meta.env.PROD ? '' : 'http://localhost:8080'
 
 type SetView = (view: string) => void;
 
@@ -171,6 +171,13 @@ function ErrorView({ setView }: { setView: SetView }) {
 
 function NotiView({ setView, notifications, setNotifications, notiFilter, setNotiFilter }: any) {
   const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+    const timer = setInterval(() => setPerm(Notification.permission), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const filteredNoti = (notifications || []).filter((n: any) => notiFilter === 'unread' ? n.unread : true);
   const unreadCount = (notifications || []).filter((n: any) => n.unread).length;
 
@@ -181,7 +188,7 @@ function NotiView({ setView, notifications, setNotifications, notiFilter, setNot
         <h3 className="header-title">알림</h3>
         <div style={{ width: 24 }} />
       </div>
-      
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', marginBottom: '24px' }}>
         <div className="filter-tabs" style={{ padding: 0, marginBottom: 0, gap: '8px' }}>
           <button className={`chip ${notiFilter === 'all' ? 'active' : ''}`} style={notiFilter !== 'all' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setNotiFilter('all')}>전체</button>
@@ -192,38 +199,48 @@ function NotiView({ setView, notifications, setNotifications, notiFilter, setNot
 
       <div className="scroll-content">
         {perm !== 'granted' && typeof Notification !== 'undefined' && (
-  <button className="primary-button" style={{ marginBottom: '16px' }} onClick={async () => {
-    const result = await Notification.requestPermission();
-    setPerm(result);
-    if (result !== 'granted') alert('브라우저 설정에서 이 사이트의 알림을 허용해주세요.');
-  }}>🔔 기기 알림 켜기</button>
-)}
-<div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>오늘</div>
-{filteredNoti.length === 0 && (
-  <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>새 알림이 없습니다.</p>
-)}
-        
+          <button className="primary-button" style={{ marginBottom: '16px' }} onClick={async () => {
+            if (Notification.permission === 'granted') { setPerm('granted'); return; }
+            if (Notification.permission === 'denied') {
+              alert('이 사이트의 알림이 차단되어 있어요.\n\nEdge 주소창에 edge://settings/content/notifications 를 입력해서 localhost:5173을 "허용"으로 바꿔주세요.');
+              return;
+            }
+            const result = await Notification.requestPermission();
+            setPerm(result);
+          }}>🔔 기기 알림 켜기</button>
+        )}
+        {perm === 'granted' && (
+          <button className="primary-button" style={{ marginBottom: '16px', background: '#6c63ff' }} onClick={() => showDeviceNotification('테스트 알림', '알림이 정상적으로 동작합니다 🎉')}>
+            🔔 테스트 알림 보내기
+          </button>
+        )}
+
+        <div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>오늘</div>
+        {filteredNoti.length === 0 && (
+          <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>새 알림이 없습니다.</p>
+        )}
+
         {filteredNoti.map((n: any) => (
-          <div key={n.id} 
-               style={{ 
-                 background: '#fff', 
-                 border: '1px solid #f1f0f5', 
-                 borderRadius: '20px', 
-                 padding: '20px', 
+          <div key={n.id}
+               style={{
+                 background: '#fff',
+                 border: '1px solid #f1f0f5',
+                 borderRadius: '20px',
+                 padding: '20px',
                  marginBottom: '16px',
                  display: 'flex',
                  alignItems: 'flex-start',
                  boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
                  cursor: 'pointer',
                  opacity: n.unread ? 1 : 0.6
-               }} 
-               onClick={() => setNotifications((prev: any)=>prev.map((item: any) => item.id === n.id ? {...item, unread: false} : item))}
+               }}
+               onClick={() => setNotifications((prev: any) => prev.map((item: any) => item.id === n.id ? { ...item, unread: false } : item))}
           >
-            <div style={{ 
-              width: 44, height: 44, 
-              background: n.type === 'goal' ? '#fff0f0' : '#eef2ff', 
-              borderRadius: 14, marginRight: 16, display: 'flex', 
-              justifyContent: 'center', alignItems: 'center', fontSize: '20px', flexShrink: 0 
+            <div style={{
+              width: 44, height: 44,
+              background: n.type === 'goal' ? '#fff0f0' : '#eef2ff',
+              borderRadius: 14, marginRight: 16, display: 'flex',
+              justifyContent: 'center', alignItems: 'center', fontSize: '20px', flexShrink: 0
             }}>
               {n.icon}
             </div>
@@ -651,7 +668,7 @@ function MainAppView({
           chartData = weekLabels.map((label, index) => {
             const tDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index);
             const tDateStr = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}-${String(tDate.getDate()).padStart(2, '0')}`;
-            return { label, rate: calculateRate((y, m, d, fullDate) => fullDate === tDateStr) };
+            return { label, rate: calculateRate((_y, _m, _d, fullDate) => fullDate === tDateStr) };
           });
 
         } else if (statsPeriod === 'month') {
@@ -1158,9 +1175,15 @@ const isLoggedInView = view !== 'login' && view !== 'register' && view !== 'erro
 useEffect(() => {
   if (!isLoggedInView) return;
   checkReminders();
-  const timer = setInterval(checkReminders, 60000);
+  const timer = setInterval(checkReminders, 30000);
   return () => clearInterval(timer);
 }, [isLoggedInView]);
+
+// 할 일/목표가 바뀌거나 화면을 이동할 때 바로 확인
+useEffect(() => {
+  if (!isLoggedInView) return;
+  checkReminders();
+}, [todos, goals, view]);
 
   useEffect(() => {
     if (view === 'main') {
