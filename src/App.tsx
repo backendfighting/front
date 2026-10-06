@@ -793,13 +793,15 @@ function MainAppView({
             )}
 
             <button className="primary-button" style={{ marginTop: '20px' }} onClick={() => {
-              if (!resultType) return alert('성공 또는 실패를 선택해주세요.');
-              if(selectedGoalId) {
-                const reasonString = resultType === 'fail' ? failReasons.join(',') : '';
-                onUpdateGoalStatus(selectedGoalId, resultType === 'success' ? '성공' : '실패', resultType === 'success' ? 100 : 0, reasonString);
-              }
-              setShowGoalResult(false);
-            }}>변동 사항 반영 저장</button>
+  if (!resultType) return alert('성공 또는 실패를 선택해주세요.');
+  if (selectedGoalId === null || selectedGoalId === undefined) {
+    alert('목표 번호를 찾지 못했습니다. 화면을 새로고침한 뒤 다시 시도해주세요.');
+    return;
+  }
+  const reasonString = resultType === 'fail' ? failReasons.join(',') : '';
+  onUpdateGoalStatus(selectedGoalId, resultType === 'success' ? '성공' : '실패', resultType === 'success' ? 100 : 0, reasonString);
+  setShowGoalResult(false);
+}}>변동 사항 반영 저장</button>
           </div>
         </div>
       )}
@@ -808,7 +810,7 @@ function MainAppView({
 }
 
 function App() {
-  const [view, setView] = useState<string>(localStorage.getItem('token') ? 'main' : 'login');
+  const [view, setView] = useState<string>('login');
     const [editingItem, setEditingItem] = useState<any>(null);
   const [editingKind, setEditingKind] = useState<string | null>(null);
   const [editingGoal, setEditingGoal] = useState<any>(null);
@@ -831,7 +833,7 @@ function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
 
   // 🌟 1. 프로필 안전 조회
-  const fetchUserProfile = async () => {
+    const fetchUserProfile = async () => {
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${BASE_URL}/api/users/me`, {
@@ -839,13 +841,17 @@ function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        setUserProfile({ 
-          name: data?.name || data?.nickname || '사용자', 
-          email: data?.email || '이메일 없음' 
+        setUserProfile({
+          name: data?.name || data?.nickname || '사용자',
+          email: data?.email || '이메일 없음'
         });
+      } else if (response.status === 401) {
+        localStorage.removeItem('token');
+        setView('login');
+        alert('로그인이 만료되었습니다. 다시 로그인해주세요.');
       }
-    } catch (e) { 
-      console.error("프로필 로딩 실패", e); 
+    } catch (e) {
+      console.error("프로필 로딩 실패", e);
     }
   };
 
@@ -872,7 +878,7 @@ function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        setGoals(Array.isArray(data) ? data : []); // 배열 형태가 아니면 빈 배열 강제 할당
+        setGoals(Array.isArray(data) ? data.map((g: any) => ({ ...g, id: g.id ?? g.goalId ?? g.goal_id })) : []);
       }
     } catch (e) { console.error("목표 로딩 실패", e); }
   };
@@ -988,21 +994,26 @@ function App() {
     } catch { }
   };
 
-  const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
+    const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${BASE_URL}/api/goals/${id}/status`, {
-        method: 'PATCH', 
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': token ? `Bearer ${token}` : '' 
-        }, 
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
         body: JSON.stringify({ status, progress, reason })
       });
-      
-      if (response.ok) fetchGoals(); 
+
+      if (response.ok) {
+        fetchGoals();
+      } else {
+        alert(`목표 결과 저장에 실패했습니다. (오류 코드 ${response.status})`);
+      }
     } catch (error) {
       console.error('서버 통신 에러:', error);
+      alert('서버와 통신할 수 없습니다.');
     }
   };
 
@@ -1065,7 +1076,7 @@ function App() {
       const response = await fetch(`${BASE_URL}/api/goals/${g.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ title, category, desc, startDate, endDate, progress: g.progress ?? 0, status: g.status || '진행중', reason: g.reason || '' })
+        body: JSON.stringify({ title, category, description: desc, startDate, endDate, progress: g.progress ?? 0, status: g.status || '진행중', reason: g.reason || '' })
       });
       if (response.ok) fetchGoals();
       else alert(`목표 수정에 실패했습니다. (오류 코드 ${response.status})`);
