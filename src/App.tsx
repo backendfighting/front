@@ -878,7 +878,7 @@ function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        setGoals(Array.isArray(data) ? data.map((g: any) => ({ ...g, id: g.id ?? g.goalId ?? g.goal_id })) : []);
+        setGoals(Array.isArray(data) ? data.map((g: any) => ({ ...g, id: g.id ?? g.goalId ?? g.goal_id, desc: g.desc ?? g.description ?? '' })) : []);
       }
     } catch (e) { console.error("목표 로딩 실패", e); }
   };
@@ -1072,15 +1072,30 @@ function App() {
 
   const handleUpdateGoal = async (g: any, title: string, category: string, desc: string, startDate: string, endDate: string) => {
     const token = localStorage.getItem('token');
+    const headers = { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' };
+    const oldId = g.id ?? g.goalId;
     try {
-      const response = await fetch(`${BASE_URL}/api/goals/${g.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ title, category, description: desc, startDate, endDate, progress: g.progress ?? 0, status: g.status || '진행중', reason: g.reason || '' })
+      // 새 목표를 먼저 만들고, 성공하면 이전 목표를 지운다
+      const res = await fetch(`${BASE_URL}/api/goals`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ title, category, desc, description: desc, startDate, endDate, progress: 0, status: '진행중', reason: '' })
       });
-      if (response.ok) fetchGoals();
-      else alert(`목표 수정에 실패했습니다. (오류 코드 ${response.status})`);
-    } catch { alert('서버와 통신할 수 없습니다.'); }
+      if (!res.ok) { alert(`목표 수정에 실패했습니다. (오류 코드 ${res.status})`); return; }
+      const created: any = await res.json().catch(() => null);
+      const delRes = await fetch(`${BASE_URL}/api/goals/${oldId}`, { method: 'DELETE', headers });
+      if (!delRes.ok) alert(`수정은 되었지만 이전 목표를 지우지 못했습니다. (오류 코드 ${delRes.status})`);
+      // 성공/실패 기록이 있던 목표면 새 목표에도 같은 결과를 반영 (실패해도 무시)
+      const newId = created?.id ?? created?.goalId;
+      if (newId && g.status && g.status !== '진행중') {
+        await fetch(`${BASE_URL}/api/goals/${newId}/status`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ status: g.status, progress: g.progress ?? 0, reason: g.reason || '' })
+        }).catch(() => {});
+      }
+      fetchGoals();
+    } catch {
+      alert('서버와 통신할 수 없습니다.');
+    }
   };
   const handleLogout = () => {
     if (confirm('로그아웃 하시겠습니까?')) {
