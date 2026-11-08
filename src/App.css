@@ -153,6 +153,11 @@ input, select, textarea {
   display: flex;
   gap: 8px;
   overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.filter-tabs::-webkit-scrollbar {
+  display: none;
 }
 .chip {
   padding: 8px 18px;
