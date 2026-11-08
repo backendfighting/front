@@ -588,7 +588,7 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
 /* 목표 마감 배지 */
 .goal-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px; flex-shrink: 0; white-space: nowrap; }
 .goal-badge.dday { background: var(--orange1); color: var(--orange); }
-.goal-badge.overdue { background: var(--p1); color: var(--p5); }
+.goal-badge.overdue { background: var(--red1); color: var(--red); }
 
 /* 통계: 루틴·목표 심볼을 넣는 둥근 사각형 */
 .stats-icon-box { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
