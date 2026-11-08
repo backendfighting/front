@@ -3,7 +3,7 @@ import {
   Mail, Lock, Eye, ChevronLeft, Flag, Bell,
   CheckCircle2, Circle,
   Plus, Calendar, BarChart2, ClipboardList, Repeat,
-  AlertCircle, RotateCcw, X, Check, Menu, Trash2, LogOut, User, Pencil, Settings, ArrowUpDown
+  AlertCircle, RotateCcw, X, Check, Menu, Trash2, LogOut, User, Pencil, Settings, ArrowUpDown, ChevronDown, ChevronRight
 } from 'lucide-react';
 import './App.css';
 
@@ -25,8 +25,11 @@ const getNotified = (): string[] => {
 
 // 컴퓨터/폰 알림 띄우기. 누르면 open 에 적힌 화면(오늘의 미션 등)이 열린다
 // (클릭 처리는 public/sw-notification.js 와 App 의 메시지 수신부에서 함)
+const DEVICE_NOTI_OFF_KEY = 'deviceNotiOff';
+const isDeviceNotiOff = () => { try { return localStorage.getItem(DEVICE_NOTI_OFF_KEY) === '1'; } catch { return false; } };
 const showDeviceNotification = async (title: string, body: string, open: string = 'todo') => {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  if (isDeviceNotiOff()) return; // 알림 설정에서 기기 알림을 끈 경우
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) { await reg.showNotification(title, { body, icon: '/pwa-192x192.png', data: { open } }); return; }
@@ -502,13 +505,25 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
     })();
   }, []);
 
-  const requestPerm = async () => {
+  // 브라우저 권한은 웹페이지가 직접 거둘 수 없어서, '끄기'는 이 기기에서 알림을 띄우지 않도록 기억해 둔다
+  const [deviceOn, setDeviceOn] = useState<boolean>(perm === 'granted' && !isDeviceNotiOff());
+  const toggleDevice = async () => {
+    if (deviceOn) {
+      try { localStorage.setItem(DEVICE_NOTI_OFF_KEY, '1'); } catch { /* 저장 불가 */ }
+      setDeviceOn(false);
+      return;
+    }
     if (typeof Notification === 'undefined') return alert('이 브라우저는 알림을 지원하지 않아요.');
     if (Notification.permission === 'denied') {
-      return alert('이 사이트의 알림이 차단되어 있어요.\n\n브라우저 설정에서 이 사이트를 "허용"으로 바꿔주세요.');
+      return alert('이 사이트의 알림이 브라우저에서 차단되어 있어요.\n\n주소창 왼쪽 아이콘 → 알림 → "허용"으로 바꾼 뒤 다시 켜주세요.');
     }
-    const result = await Notification.requestPermission();
-    setPerm(result);
+    if (Notification.permission === 'default') {
+      const result = await Notification.requestPermission();
+      setPerm(result);
+      if (result !== 'granted') return;
+    }
+    try { localStorage.removeItem(DEVICE_NOTI_OFF_KEY); } catch { /* 저장 불가 */ }
+    setDeviceOn(true);
   };
 
   const addTime = () => {
@@ -540,12 +555,10 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
           <div>
             <div style={{ fontWeight: '700', fontSize: '14px', color: '#1a191b' }}>기기 알림</div>
             <div style={{ fontSize: '12px', color: '#b5b1bc', marginTop: '4px' }}>
-              {perm === 'granted' ? '켜져 있습니다' : perm === 'denied' ? '브라우저에서 차단됨' : '꺼져 있습니다'}
+              {deviceOn ? '켜져 있습니다' : perm === 'denied' ? '브라우저에서 차단됨' : '꺼져 있습니다'}
             </div>
           </div>
-          {perm !== 'granted' && (
-            <button className="chip" onClick={requestPerm}>켜기</button>
-          )}
+          <Toggle on={deviceOn} onClick={toggleDevice} label="기기 알림" />
         </div>
 
         <div className="noti-section">
@@ -624,7 +637,7 @@ const groupDoneRecords = (records: any[]) => {
 };
 
 // 날짜마다 "해야 했던 루틴"과 "실제로 한 루틴"을 루틴 단위로 센다.
-// 체크한 루틴은 그날 해야 했던 루틴에도 반드시 포함되므로 달성률이 100%를 넘지 않는다.
+// 체크한 루틴은 그날 해야 했던 루틴에도 반드시 포함되므로 수행률이 100%를 넘지 않는다.
 const buildDailyStats = (routines: any[], records: any[], start: Date, end: Date) => {
   const doneByDate = groupDoneRecords(records);
   const out: Record<string, DayStat> = {};
@@ -654,7 +667,7 @@ const rangeRate = (daily: Record<string, DayStat>, from: Date, to: Date) => {
   return e > 0 ? Math.round((d / e) * 100) : null;
 };
 
-// 요일별 달성률 (from~to 사이만)
+// 요일별 수행률 (from~to 사이만)
 const buildWeekdayStats = (daily: Record<string, DayStat>, from: Date, to: Date) => {
   const agg = Array.from({ length: 7 }, () => ({ expected: 0, done: 0 }));
   for (let x = new Date(from); toDateStr(x) <= toDateStr(to); x = addDays(x, 1)) {
@@ -670,7 +683,7 @@ const buildWeekdayStats = (daily: Record<string, DayStat>, from: Date, to: Date)
   }));
 };
 
-// 카테고리별 루틴 달성률 (루틴 단위로 셈)
+// 카테고리별 루틴 수행률 (루틴 단위로 셈)
 const buildCategoryStats = (routines: any[], records: any[], start: Date, end: Date) => {
   const doneByDate = groupDoneRecords(records);
   const exp: Record<string, number> = {};
@@ -693,20 +706,17 @@ const buildCategoryStats = (routines: any[], records: any[], start: Date, end: D
   })).sort((a, b) => b.rate - a.rate);
 };
 
-// 지난 달 대비 증감률 (상대 비율: 14% -> 0% 이면 100% 감소)
+// 지난 달 대비 수행률 변화 (퍼센트포인트: 40% -> 45% 이면 5%p 증가)
 const monthOverMonth = (daily: Record<string, DayStat>, today: Date) => {
   const thisM = sumRange(daily, new Date(today.getFullYear(), today.getMonth(), 1), today);
   const lastM = sumRange(daily, new Date(today.getFullYear(), today.getMonth() - 1, 1), new Date(today.getFullYear(), today.getMonth(), 0));
   if (thisM.e === 0 || lastM.e === 0) return { kind: 'none' as const };
-  const now = thisM.d / thisM.e;
-  const before = lastM.d / lastM.e;
-  if (before === 0) return now === 0 ? { kind: 'same' as const } : { kind: 'fromZero' as const, now: Math.round(now * 100) };
-  const pct = Math.round(((now - before) / before) * 100);
-  if (pct === 0) return { kind: 'same' as const };
-  return { kind: pct > 0 ? ('up' as const) : ('down' as const), pct: Math.abs(pct) };
+  const diff = Math.round((thisM.d / thisM.e - lastM.d / lastM.e) * 100);
+  if (diff === 0) return { kind: 'same' as const };
+  return { kind: diff > 0 ? ('up' as const) : ('down' as const), pct: Math.abs(diff) };
 };
 
-// 달성률이 가장 낮은 항목들 (동점이면 전부)
+// 수행률이 가장 낮은 항목들 (동점이면 전부)
 const lowestOf = <T extends { rate: number | null }>(items: T[]) => {
   const valid = items.filter(x => x.rate !== null);
   if (valid.length === 0) return [];
@@ -722,9 +732,6 @@ const CATEGORIES = ['공부', '업무', '운동', '건강', '취미', '자기 �
 const categoryOptions = (current?: string) =>
   current && !CATEGORIES.includes(current) ? [current, ...CATEGORIES] : CATEGORIES;
 
-// 시간 선택용 (오전/오후 + 12시간)
-const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
-const BASE_MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
 
 // 2026-02-31 처럼 달력에 없는 날짜를 걸러낸다
 const isRealDate = (s: string) => {
@@ -735,37 +742,121 @@ const isRealDate = (s: string) => {
   return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
 };
 
-// 오전/오후 버튼 + 시·분 선택 (값은 "HH:MM" 24시간)
-function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const safe = isRealTime(value) ? value : '09:00';
-  const h24 = Number(safe.slice(0, 2));
-  const min = safe.slice(3, 5);
-  const mer: 'AM' | 'PM' = h24 < 12 ? 'AM' : 'PM';
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
-  const minuteOptions = BASE_MINUTES.includes(min) ? BASE_MINUTES : [...BASE_MINUTES, min].sort();
-  const set = (m: 'AM' | 'PM', h: number, mm: string) =>
-    onChange(`${String((h % 12) + (m === 'PM' ? 12 : 0)).padStart(2, '0')}:${mm}`);
+// 드롭다운처럼 고르고, 더블클릭하면 숫자를 직접 입력할 수 있는 칸
+function PickField({ value, options, format, onChange, min, max, ariaLabel, style }: {
+  value: number; options: number[]; format: (v: number) => string; onChange: (v: number) => void;
+  min: number; max: number; ariaLabel: string; style?: any;
+}) {
+  const [open, setOpen] = useState(false);
+  const [up, setUp] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const clickTimer = useRef<any>(null);
+  const cancelRef = useRef(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const list = options.includes(value) ? options : [...options, value].sort((a, b) => a - b);
+
+  useEffect(() => () => clearTimeout(clickTimer.current), []);
+
+  const openList = () => {
+    // 보이는 영역(스크롤 영역) 아래쪽이면 목록을 위로 펼친다
+    const r = btnRef.current?.getBoundingClientRect();
+    const area = btnRef.current?.closest('.scroll-content')?.getBoundingClientRect();
+    const bottomLimit = area ? Math.min(area.bottom, window.innerHeight) : window.innerHeight;
+    setUp(!!r && r.bottom + 210 > bottomLimit);
+    setOpen(o => !o);
+  };
+  const startEdit = () => {
+    clearTimeout(clickTimer.current);
+    setOpen(false);
+    setDraft(String(value));
+    cancelRef.current = false;
+    setEditing(true);
+  };
+  const commit = () => {
+    setEditing(false);
+    if (cancelRef.current) return;
+    const n = Number(draft);
+    if (draft.trim() === '' || !Number.isInteger(n) || n < min || n > max) {
+      alert(`${min}~${max} 사이의 숫자로 입력해주세요.`);
+      return;
+    }
+    onChange(n);
+  };
+
+  if (editing) {
+    return (
+      <input className="pick-field pick-input" type="number" autoFocus value={draft} min={min} max={max}
+             aria-label={ariaLabel} style={style}
+             onChange={(e) => setDraft(e.target.value)}
+             onBlur={commit}
+             onKeyDown={(e) => {
+               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+               if (e.key === 'Escape') { cancelRef.current = true; (e.target as HTMLInputElement).blur(); }
+             }} />
+    );
+  }
   return (
-    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flex: 1, minWidth: 0 }}>
-      <button className={`chip ${mer === 'AM' ? 'active' : ''}`} style={{ padding: '10px 12px', flexShrink: 0 }} onClick={() => set('AM', h12, min)}>오전</button>
-      <button className={`chip ${mer === 'PM' ? 'active' : ''}`} style={{ padding: '10px 12px', flexShrink: 0 }} onClick={() => set('PM', h12, min)}>오후</button>
-      <select className="time-select" value={h12} onChange={(e) => set(mer, Number(e.target.value), min)}>
-        {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}시</option>)}
-      </select>
-      <select className="time-select" value={min} onChange={(e) => set(mer, h12, e.target.value)}>
-        {minuteOptions.map(m => <option key={m} value={m}>{m}분</option>)}
-      </select>
+    <div className="pick-wrap" style={style}>
+      <button ref={btnRef} type="button" className="pick-field" aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open}
+              title="더블클릭하면 직접 입력할 수 있어요"
+              onClick={() => { clearTimeout(clickTimer.current); clickTimer.current = setTimeout(openList, 200); }}
+              onDoubleClick={startEdit}>
+        <span>{format(value)}</span>
+        <ChevronDown size={14} color="#8e8a96" />
+      </button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 20 }} onClick={() => setOpen(false)} />
+          <ul className={`pick-list ${up ? 'up' : ''}`} role="listbox" aria-label={ariaLabel}
+              ref={(el) => { el?.querySelector('.active')?.scrollIntoView({ block: 'nearest' }); }}>
+            {list.map(o => (
+              <li key={o} role="option" aria-selected={o === value} className={o === value ? 'active' : ''}
+                  onClick={() => { onChange(o); setOpen(false); }}>
+                {format(o)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
 
-// 알림 시점 선택지 (값 = 몇 분 전 / none = 알림 없음 / custom = 직접 입력)
-const ALARM_OPTIONS = [
-  { v: 'none', l: '알림 없음' }, { v: '0', l: '일정 시작 시간' }, { v: '10', l: '10분 전' },
-  { v: '30', l: '30분 전' }, { v: '60', l: '1시간 전' }, { v: 'custom', l: '직접 설정' },
-];
-const alarmFromMinutes = (n: any) =>
-  n === null || n === undefined ? 'none' : ['0', '10', '30', '60'].includes(String(n)) ? String(n) : 'custom';
+const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1);
+const MINUTES_5 = Array.from({ length: 12 }, (_, i) => i * 5);
+
+// 오전/오후 + 시 + 분 (값은 "HH:MM" 24시간). 시·분은 더블클릭하면 직접 입력
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const safe = isRealTime(value) ? value : '09:00';
+  const h24 = Number(safe.slice(0, 2));
+  const min = Number(safe.slice(3, 5));
+  const mer: 'AM' | 'PM' = h24 < 12 ? 'AM' : 'PM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const set = (m: 'AM' | 'PM', h: number, mm: number) =>
+    onChange(`${String((h % 12) + (m === 'PM' ? 12 : 0)).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
+  return (
+    <div className="time-row">
+      <div className="ampm" role="group" aria-label="오전 오후">
+        <button type="button" className={mer === 'AM' ? 'on' : ''} onClick={() => set('AM', h12, min)}>오전</button>
+        <button type="button" className={mer === 'PM' ? 'on' : ''} onClick={() => set('PM', h12, min)}>오후</button>
+      </div>
+      <PickField value={h12} options={HOURS_12} format={(h) => `${h}시`} min={1} max={12} ariaLabel="시"
+                 onChange={(h) => set(mer, h, min)} style={{ flex: 1 }} />
+      <PickField value={min} options={MINUTES_5} format={(m) => `${String(m).padStart(2, '0')}분`} min={0} max={59} ariaLabel="분"
+                 onChange={(m) => set(mer, h12, m)} style={{ flex: 1 }} />
+    </div>
+  );
+}
+
+// 알림: 몇 분 전 (0 = 시작 시간). 5분 단위로 2시간 전까지, 그 밖은 더블클릭해서 직접 입력
+const ALARM_MINUTES = Array.from({ length: 25 }, (_, i) => i * 5);
+const formatAlarm = (m: number, startLabel: string) => {
+  if (m === 0) return startLabel;
+  if (m >= 60 && m % 60 === 0) return `${m / 60}시간 전`;
+  if (m > 60) return `${Math.floor(m / 60)}시간 ${m % 60}분 전`;
+  return `${m}분 전`;
+};
 const toServerPriority = (p: string) => (p === 'normal' ? 'MEDIUM' : String(p || 'normal').toUpperCase());
 
 // 켜고 끄는 스위치
@@ -807,11 +898,10 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
     isRoutineEdit ? (editingItem?.startDate ? String(editingItem.startDate).slice(0, 10) : '') : globalDate
   );
   const [useTime, setUseTime] = useState<boolean>(isRoutineEdit ? !!editingItem?.routineTime : false);
-  // 알림
-  const [alarm, setAlarm] = useState<string>(alarmFromMinutes(editingItem?.notifyBefore));
-  const [customMin, setCustomMin] = useState<string>(
-    alarmFromMinutes(editingItem?.notifyBefore) === 'custom' ? String(editingItem.notifyBefore) : '15'
-  );
+  // 알림: 끄기 / 몇 분 전 (0 = 시작 시간)
+  const hasAlarm = editingItem?.notifyBefore !== null && editingItem?.notifyBefore !== undefined;
+  const [alarmOn, setAlarmOn] = useState<boolean>(hasAlarm);
+  const [alarmMin, setAlarmMin] = useState<number>(hasAlarm ? Number(editingItem.notifyBefore) : 0);
 
   const isRoutine = isRoutineEdit || (!isEdit && type === 'routine');
   const timeOn = !isRoutine || useTime; // 할 일은 항상 시간이 있다
@@ -826,11 +916,8 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
     if (timeOn && !isRealTime(time)) return alert('시간을 다시 확인해주세요. 존재하지 않는 시간입니다.');
 
     let notifyBefore: number | null = null;
-    if (timeOn && alarm !== 'none') {
-      notifyBefore = alarm === 'custom' ? Number(customMin) : Number(alarm);
-      if (alarm === 'custom' && (!Number.isInteger(notifyBefore) || notifyBefore < 1 || notifyBefore > 1440)) {
-        return alert('알림은 1분 전부터 1440분(하루) 전까지 설정할 수 있어요.');
-      }
+    if (timeOn && alarmOn) {
+      notifyBefore = alarmMin;
       // 알림을 켰는데 브라우저 알림 권한을 아직 안 정했다면 이때 물어본다
       if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
         Notification.requestPermission().catch(() => {});
@@ -853,20 +940,15 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
       {!timeOn ? (
         <p className="field-hint">시간을 정하면 알림을 받을 수 있어요.</p>
       ) : (
-        <>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
-            {ALARM_OPTIONS.map(o => (
-              <button key={o.v} className={`chip ${alarm === o.v ? 'active' : ''}`} onClick={() => setAlarm(o.v)}>{o.l}</button>
-            ))}
-          </div>
-          {alarm === 'custom' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-              <input type="number" min={1} max={1440} value={customMin} aria-label="몇 분 전에 알림"
-                     onChange={(e) => setCustomMin(e.target.value)} style={{ width: '96px', marginTop: 0 }} />
-              <span style={{ fontSize: '13px', color: '#4e4b52', fontWeight: 600 }}>분 전</span>
-            </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+          <button className={`chip chip-sm ${!alarmOn ? 'active' : ''}`} onClick={() => setAlarmOn(false)}>알림 없음</button>
+          <button className={`chip chip-sm ${alarmOn ? 'active' : ''}`} onClick={() => setAlarmOn(true)}>알림 시간 설정</button>
+          {alarmOn && (
+            <PickField value={alarmMin} options={ALARM_MINUTES} min={0} max={1440} ariaLabel="알림 시점"
+                       format={(m) => formatAlarm(m, isRoutine ? '루틴 시작 시간' : '일정 시작 시간')}
+                       onChange={setAlarmMin} style={{ width: '128px' }} />
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -876,7 +958,7 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
       <label>⭐ 중요도</label>
       <div className="filter-tabs" style={{ marginTop: '6px' }}>
         {['high', 'normal', 'low'].map(p => (
-          <button key={p} className={`chip ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
+          <button key={p} className={`chip chip-sm ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
             {p === 'high' ? '높음' : p === 'normal' ? '보통' : '낮음'}
           </button>
         ))}
@@ -908,6 +990,13 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
         {isRoutine ? (
           <>
             <div className="input-group">
+              <label>🏷️ 카테고리</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                {categoryOptions(editingItem?.category).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="input-group">
               <label>🔁 반복 요일</label>
               <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
                 {DAY_OPTIONS.map(d => (
@@ -927,7 +1016,7 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
             <div className="input-group">
               <label>📅 시작일</label>
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              <p className="field-hint">{startDate ? '이 날부터 달력에 보여요.' : '비워두면 처음부터 있던 루틴으로 계산돼요.'}</p>
+              {!startDate && <p className="field-hint">비워두면 처음부터 있던 루틴으로 계산돼요.</p>}
             </div>
 
             <div className="input-group">
@@ -940,13 +1029,6 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
 
             {alarmSection}
             {prioritySection}
-
-            <div className="input-group">
-              <label>카테고리</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {categoryOptions(editingItem?.category).map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
           </>
         ) : (
           <>
@@ -1159,6 +1241,13 @@ function MainAppView({
     );
   };
 
+  // 화면 맨 아래 응원 문구 (추가 버튼이 목록을 가리지 않도록 여백 역할도 함)
+  const renderCheerFooter = () => (
+    <div className="cheer-footer">
+      꾸준한 실천으로 만드는 갓생 루틴!<br />Goal Tracker가 응원합니다.
+    </div>
+  );
+
   // 할 일 탭과 달력 탭에서 똑같이 쓰는 미션 목록 (일반 할 일 + 반복 루틴)
   // 달력 탭에서는 전체/완료 필터와 상관없이 그 날의 미션을 전부 보여준다
   const renderMissionLists = (ignoreFilter = false) => {
@@ -1221,9 +1310,7 @@ function MainAppView({
       })}
 
       {/* 추가 버튼이 마지막 루틴의 수정·삭제 버튼을 가리지 않도록 넉넉히 비워둔다 */}
-      <div style={{ textAlign: 'center', color: '#c9c5d0', fontSize: '12px', fontWeight: '600', lineHeight: 1.8, padding: '64px 0 69px' }}>
-        꾸준한 실천으로 만드는 갓생 루틴!<br />Goal Tracker가 응원합니다.
-      </div>
+      {renderCheerFooter()}
     </>
   );
   };
@@ -1326,13 +1413,13 @@ function MainAppView({
             <div className="scroll-content">
               <div style={{ background: '#fbfbff', border: '1px solid #f1f0f5', borderRadius: '24px', padding: '16px', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <button className="chip" onClick={() => { setPickerOpen(null); handlePrevMonth(); }}>이전 달</button>
+                  <button className="cal-nav-btn" aria-label="이전 달" onClick={() => { setPickerOpen(null); handlePrevMonth(); }}><ChevronLeft size={18} /></button>
                   {/* 연도와 월을 눌러 바로 이동 */}
                   <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', display: 'flex', gap: '6px' }}>
                     <span className="date-picker-btn" onClick={() => setPickerOpen(pickerOpen === 'year' ? null : 'year')}>{calYear}년</span>
                     <span className="date-picker-btn" onClick={() => setPickerOpen(pickerOpen === 'month' ? null : 'month')}>{calMonth}월</span>
                   </h4>
-                  <button className="chip" onClick={() => { setPickerOpen(null); handleNextMonth(); }}>다음 달</button>
+                  <button className="cal-nav-btn" aria-label="다음 달" onClick={() => { setPickerOpen(null); handleNextMonth(); }}><ChevronRight size={18} /></button>
                 </div>
 
                 {pickerOpen && (
@@ -1448,6 +1535,7 @@ function MainAppView({
                   </div>
                 );
               })}
+              {renderCheerFooter()}
             </div>
             <div className="fab" onClick={() => setView('goal-add')}><Plus /></div>
           </>
@@ -1456,7 +1544,7 @@ function MainAppView({
       case 'stats': {
         const today = new Date();
         const thisYear = today.getFullYear();
-        const { summaryStart, weekStart, fetchStart } = statsRanges(today);
+        const { summaryStart, yearStart, weekStart, fetchStart } = statsRanges(today);
 
         // 올해 + 최근 3개월을 한 번에 계산해 두고 필요한 구간만 꺼내 쓴다
         const daily = buildDailyStats(allRoutines || [], statsRecords || [], fetchStart, today);
@@ -1468,13 +1556,13 @@ function MainAppView({
         let periodDesc = '';
 
         if (period === 'day') {
-          periodDesc = '이번 주 요일별 달성 통계를 보여드려요';
+          periodDesc = '이번 주 요일별 수행 통계를 보여드려요';
           for (let i = 0; i < 7; i++) {
             const d = addDays(weekStart, i);
             chartData.push({ label: WEEKDAY_KO[d.getDay()], rate: toDateStr(d) <= toDateStr(today) ? rangeRate(daily, d, d) : null });
           }
         } else if (period === 'week') {
-          periodDesc = '이번 달 주차별 달성 통계를 보여드려요';
+          periodDesc = '이번 달 주차별 수행 통계를 보여드려요';
           // 달력의 한 줄(일~토)이 한 주차
           const first = new Date(today.getFullYear(), today.getMonth(), 1);
           const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -1487,7 +1575,7 @@ function MainAppView({
             chartData.push({ label: `${w + 1}주차`, rate: toDateStr(from) <= toDateStr(today) ? rangeRate(daily, from, to < today ? to : today) : null });
           }
         } else {
-          periodDesc = '이번 년도 월별 달성 통계를 보여드려요';
+          periodDesc = '이번 년도 월별 수행 통계를 보여드려요';
           for (let m = 0; m < 12; m++) {
             const from = new Date(thisYear, m, 1);
             const to = new Date(thisYear, m + 1, 0);
@@ -1497,10 +1585,14 @@ function MainAppView({
         const maxRateValue = Math.max(0, ...chartData.map(c => c.rate ?? 0));
 
         // --- 요약 (최근 3개월 기준) ---
-        const worstDays = lowestOf(buildWeekdayStats(daily, summaryStart, today));
+        const weekdayStats = buildWeekdayStats(daily, summaryStart, today);
+        const worstDays = lowestOf(weekdayStats);
+        const daysWithData = weekdayStats.filter(d => d.rate !== null).length;
         const mom = monthOverMonth(daily, today);
-        const routineCats = buildCategoryStats(allRoutines || [], statsRecords || [], summaryStart, today);
-        const worstRoutineCats = lowestOf(routineCats);
+        // 카테고리별 그래프는 올해 전체, 요약의 '가장 낮은 카테고리'는 최근 3개월 기준
+        const routineCats = buildCategoryStats(allRoutines || [], statsRecords || [], yearStart, today);
+        const recentCats = buildCategoryStats(allRoutines || [], statsRecords || [], summaryStart, today);
+        const worstRoutineCats = lowestOf(recentCats);
 
         // --- 목표: 올해 기준 ---
         const yearGoals = (goals || []).filter((g: any) => {
@@ -1534,7 +1626,7 @@ function MainAppView({
         }));
 
         // 저채도·중명도 보라 (요약에서 강조할 때)
-        const MUTED_PURPLE = '#8478b0';
+        const MUTED_PURPLE = '#7266a0';
 
         const sectionTitle = (icon: any, text: string, sub: string, color: string) => (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 14px 2px' }}>
@@ -1559,35 +1651,34 @@ function MainAppView({
           </div>
         );
 
-        // 요약 레포트: 동그란 글머리 + 항목 사이 여유
-        const summaryLines: any[] = !hasRecentData
-          ? ['아직 최근 3개월 루틴 기록이 없어요. 루틴을 만들고 체크해보세요.']
-          : [
-              worstDays.length > 0
-                ? <>최근 3개월 간 트래커님은 <b style={{ color: MUTED_PURPLE }}>{worstDays.map(d => d.label).join(', ')}요일</b>에 가장 달성률이 저조했어요.</>
-                : '아직 요일별로 비교할 기록이 부족해요.',
-              mom.kind === 'none' ? '지난 달 기록이 없어 비교할 수 없어요.'
-                : mom.kind === 'same' ? '지난 달과 달성률이 같아요.'
-                : mom.kind === 'fromZero' ? <>지난 달 달성률이 0%라 증감률은 계산할 수 없지만, 이번 달은 <b>{mom.now}%</b>를 달성했어요.</>
-                : <>지난 달 대비 달성률은 <b style={{ color: mom.kind === 'up' ? '#3f9a5a' : '#d0605e' }}>{mom.pct}% {mom.kind === 'up' ? '증가' : '감소'}</b>했어요.</>,
-              worstRoutineCats.length > 0
-                ? <>최근 3개월 간 <b style={{ color: MUTED_PURPLE }}>{worstRoutineCats.map(c => c.name).join(', ')}</b> 카테고리의 달성률이 가장 낮았어요.</>
-                : '카테고리별로 비교할 기록이 부족해요.',
-            ];
+        // 요약 레포트 (최근 3개월): 머리말 아래에 요일 / 카테고리 / 지난 달 대비 순서
+        const summaryLines: any[] = [
+          // 모든 요일이 동점이면 요일을 전부 나열하는 대신 따로 안내
+          daysWithData < 2 ? '요일별로 비교할 기록이 아직 부족해요.'
+            : worstDays.length === daysWithData ? '요일마다 수행률이 같았어요.'
+            : <><b style={{ color: MUTED_PURPLE }}>{worstDays.map(d => d.label).join(', ')}요일</b>에 가장 수행률이 저조했어요.</>,
+          recentCats.length === 0 ? '카테고리별로 비교할 기록이 아직 부족해요.'
+            : recentCats.length === 1 ? '카테고리가 하나뿐이라 비교할 수 없어요.'
+            : worstRoutineCats.length === recentCats.length ? '카테고리마다 수행률이 같았어요.'
+            : <><b style={{ color: MUTED_PURPLE }}>{worstRoutineCats.map(c => c.name).join(', ')}</b> 카테고리의 수행률이 가장 낮았어요.</>,
+          mom.kind === 'none' ? '지난 달 기록이 없어 비교할 수 없어요.'
+            : mom.kind === 'same' ? '지난 달과 수행률이 같아요.'
+            : <>지난 달 대비 수행률은 <b style={{ color: mom.kind === 'up' ? '#3f9a5a' : '#d0605e' }}>{mom.pct}%p {mom.kind === 'up' ? '증가' : '감소'}</b>했어요.</>,
+        ];
 
         return (
           <>
             <div className="header-row"><Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} /><h3 className="header-title">통계</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
             <div className="scroll-content">
               <div style={{ fontSize: '12.5px', color: '#7a7680', lineHeight: 1.7, textAlign: 'left', marginBottom: '24px', fontWeight: '500' }}>
-                올해의 <b style={{ color: '#6c63ff' }}>루틴 달성률</b>과 <b style={{ color: '#5b678c' }}>목표 달성률</b>을 보여드려요.
+                올해의 <b style={{ color: '#6c63ff' }}>루틴 수행률</b>과 <b style={{ color: '#5b678c' }}>목표 달성률</b>을 보여드려요.
               </div>
 
               {/* ===================== 루틴 ===================== */}
               <div style={{ background: '#fbfbff', border: '1px solid #efedfa', borderRadius: '20px', padding: '18px 16px', marginBottom: '28px' }}>
                 {sectionTitle(<Repeat size={16} color="#6c63ff" />, '루틴', `${thisYear}년`, '#6c63ff')}
 
-                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', marginLeft: '2px' }}>기간별 루틴 달성률</div>
+                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', marginLeft: '2px' }}>기간별 루틴 수행률</div>
                 <div className="filter-tabs" style={{ padding: 0, margin: '10px 0 6px', gap: '8px' }}>
                   <button className={`chip ${period === 'day' ? 'active' : ''}`} onClick={() => setStatsPeriod('day')}>일간</button>
                   <button className={`chip ${period === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
@@ -1610,10 +1701,7 @@ function MainAppView({
                   })}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '26px 0 10px 2px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '700' }}>카테고리별 루틴 달성률</span>
-                  <span style={{ fontSize: '10px', fontWeight: '600', color: '#a9a5b0' }}>최근 3개월</span>
-                </div>
+                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', margin: '26px 0 10px 2px' }}>카테고리별 루틴 수행률</div>
                 <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
                   {routineCats.length === 0
                     ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>아직 기록이 없어요.</div>
@@ -1622,12 +1710,19 @@ function MainAppView({
 
                 {/* 요약 레포트 (최근 3개월) */}
                 <div className="stats-summary">
-                  {summaryLines.map((l, i) => (
-                    <div key={i} className="stats-summary-item">
-                      <span className="stats-summary-dot" />
-                      <span>{l}</span>
-                    </div>
-                  ))}
+                  {!hasRecentData ? (
+                    <div className="stats-summary-item">아직 최근 3개월 루틴 기록이 없어요. 루틴을 만들고 체크해보세요.</div>
+                  ) : (
+                    <>
+                      <div className="stats-summary-head">최근 3개월 간 트래커님의 루틴은</div>
+                      {summaryLines.map((l, i) => (
+                        <div key={i} className="stats-summary-item">
+                          <span className="stats-summary-dot" />
+                          <span>{l}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
 
