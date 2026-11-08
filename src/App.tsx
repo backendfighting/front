@@ -64,6 +64,8 @@ function App() {
   const [notiSettingsBack, setNotiSettingsBack] = useState<string>('main');
   // 이미 확인한 서버 알림 id (처음 불러올 때는 null)
   const serverSeenRef = useRef<Set<string> | null>(null);
+  // 처리 중인 루틴 체크 요청 (빠른 연속 클릭으로 중복 요청이 가지 않게 막음)
+  const routineTogglingRef = useRef<Set<number>>(new Set());
   // 통계용 데이터 (최근 3개월 루틴 기록 + 내 루틴 전체)
   const [statsRecords, setStatsRecords] = useState<any[]>([]);
   const [allRoutines, setAllRoutines] = useState<any[]>([]);
@@ -87,6 +89,7 @@ function App() {
         });
       } else if (response.status === 401) {
         localStorage.removeItem('token');
+        resetNotificationState();
         setView('login');
         alert('로그인이 만료되었습니다. 다시 로그인해주세요.');
       }
@@ -182,15 +185,17 @@ function App() {
   };
 
   const handleToggleBackendRoutine = async (routineId: number) => {
-    if (!routineId) return;
+    if (!routineId || routineTogglingRef.current.has(routineId)) return;
+    routineTogglingRef.current.add(routineId);
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${BASE_URL}/api/records/toggle?routineId=${routineId}&date=${globalDate}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }
       });
-      if (response.ok) fetchBackendRoutines();
+      if (response.ok) await fetchBackendRoutines();
     } catch (e) { console.error(e); }
+    finally { routineTogglingRef.current.delete(routineId); }
   };
 
   // date: 이 날짜부터 달력에서 사라짐 (그 날 이미 완료했으면 다음 날부터). 기본은 지금 보고 있는 날짜
@@ -357,11 +362,18 @@ function App() {
       return false;
     }
   };
+  // 계정이 바뀌면 이전 계정의 알림 목록을 지우고, 새 계정의 지난 알림이 한꺼번에 뜨지 않게 처음 상태로 되돌린다
+  const resetNotificationState = () => {
+    serverSeenRef.current = null;
+    setNotifications([]);
+  };
+
   const handleLogout = () => {
     if (confirm('로그아웃 하시겠습니까?')) {
       localStorage.removeItem('token');
       localStorage.removeItem('lastView');
       localStorage.removeItem('lastTab');
+      resetNotificationState();
       setView('login');
       setIsSidebarOpen(false);
     }
@@ -372,6 +384,7 @@ function App() {
     localStorage.removeItem('token');
     localStorage.removeItem('lastView');
     localStorage.removeItem('lastTab');
+    resetNotificationState();
     setIsSidebarOpen(false);
     setView('login');
   };
