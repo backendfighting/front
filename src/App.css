@@ -137,6 +137,10 @@ input, select, textarea {
   align-items: center;
   width: 100%;
   margin-bottom: 24px;
+  /* 모든 페이지의 제목 줄 높이를 똑같이 (창 크기와 상관없이) */
+  height: 24px;
+  line-height: 24px;
+  flex-shrink: 0;
 }
 .header-title { font-size: 18px; font-weight: 800; color: var(--g4); margin: 0; }
 
@@ -520,6 +524,7 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
 
 /* 달력: 날짜를 한 번 눌렀을 때 보이는 간략한 목록 */
 .mini-list {
+  cursor: pointer;
   margin-top: 10px;
   padding: 12px 14px;
   background: #fff;
@@ -644,3 +649,15 @@ select {
 /* 목표: 마감 지난 목표의 '결과 기록 필요' (날짜 옆, 작게) */
 .goal-badge.overdue.small { font-size: 8px; padding: 1px 5px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
 .year-banner-text { word-break: keep-all; }
+
+/* 루틴 관리: 제목 줄 오른쪽의 작은 원형 추가 버튼 (5보라 원 + 1보라 십자) */
+.round-add-btn {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--p5); border: none; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+
+/* 목표 결과 기록: 실패 사유 버튼 한 줄에 3개씩 */
+.fail-reason-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.fail-reason-grid .chip { padding: 8px 4px; font-size: 13px; text-align: center; }
