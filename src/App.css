@@ -114,6 +114,8 @@ input, select, textarea {
   white-space: nowrap;
 }
 .chip.active { background: #586589; color: white; }
+/* 통계 기간 버튼(일간·주간·월간): 연보라 */
+.chip.chip-lavender.active { background: #958ef4; color: white; }
 
 /* 고정식 네비게이션 시스템 */
 .bottom-nav {
@@ -437,11 +439,11 @@ input, select, textarea {
   display: flex; align-items: center; justify-content: space-between; gap: 4px;
   padding: 0 8px 0 10px;
   border: 1px solid #ecebf1; border-radius: 10px; background: #fbfbff;
-  font-size: 13px; font-weight: 600; color: #333;
+  font-size: 13px; font-weight: 400; color: #333;
   cursor: pointer; box-sizing: border-box; white-space: nowrap;
 }
 .pick-field span { overflow: hidden; text-overflow: ellipsis; }
-input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border-color: #b9b2d6; }
+input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border-color: #b9b2d6; font-weight: 400; }
 .pick-list {
   position: absolute; left: 0; right: 0; top: 38px; z-index: 21;
   min-width: 100%; max-height: 200px; overflow-y: auto;
@@ -452,10 +454,10 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
 .pick-list.up { top: auto; bottom: 38px; }
 .pick-list li {
   padding: 8px 10px; border-radius: 8px;
-  font-size: 13px; color: #4e4b52; cursor: pointer; white-space: nowrap;
+  font-size: 13px; font-weight: 400; color: #4e4b52; cursor: pointer; white-space: nowrap;
 }
 .pick-list li:hover { background: #f5f4ff; }
-.pick-list li.active { background: #ece9ff; color: #5a50d6; font-weight: 700; }
+.pick-list li.active { background: #ece9ff; color: #5a50d6; font-weight: 500; }
 
 /* 달력 < > 버튼 */
 .cal-nav-btn {
@@ -484,13 +486,12 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
 .mini-head { font-size: 11px; font-weight: 700; color: #7a7680; margin-bottom: 6px; }
 .mini-empty { font-size: 11px; color: #c9c5d0; padding: 2px 0 2px 2px; }
 .mini-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
-.mini-dot {
+/* 달력 간략 목록: 눌러도 완료되지 않으니 체크박스 없이, 완료한 미션에만 체크 심볼 ('일반 할 일' 제목과 같은 색) */
+.mini-check {
   width: 13px; height: 13px; flex-shrink: 0;
-  border-radius: 50%; border: 1.5px solid #dcdae3;
   display: flex; align-items: center; justify-content: center;
-  box-sizing: border-box; color: #fff;
+  color: #7a7680;
 }
-.mini-dot.done { background: #8b84e8; border-color: #8b84e8; }
 .mini-title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: #4e4b52; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-title.done { color: #b5b1bc; text-decoration: line-through; }
 .mini-time { font-size: 10px; font-weight: 600; color: #b5b1bc; flex-shrink: 0; }

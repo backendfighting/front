@@ -25,15 +25,10 @@ const getNotified = (): string[] => {
 
 // 컴퓨터/폰 알림 띄우기. 누르면 open 에 적힌 화면(오늘의 미션 등)이 열린다
 // (클릭 처리는 public/sw-notification.js 와 App 의 메시지 수신부에서 함)
-// 기기 알림(팝업) 켜짐 여부는 이 기기에만 저장. 기본값은 꺼짐
-const DEVICE_NOTI_ON_KEY = 'deviceNotiOn';
-const isDeviceNotiOn = () => { try { return localStorage.getItem(DEVICE_NOTI_ON_KEY) === '1'; } catch { return false; } };
-const setDeviceNotiOn = (on: boolean) => {
-  try { if (on) localStorage.setItem(DEVICE_NOTI_ON_KEY, '1'); else localStorage.removeItem(DEVICE_NOTI_ON_KEY); } catch { /* 저장 불가 */ }
-};
-const showDeviceNotification = async (title: string, body: string, open: string = 'todo', force: boolean = false) => {
+// 기기 알림 켜짐 여부는 서버(계정)에 저장된다. 꺼져 있으면 서버가 알림을 아예 만들지 않으므로
+// 여기서는 브라우저 알림 허용 여부만 확인한다
+const showDeviceNotification = async (title: string, body: string, open: string = 'todo') => {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  if (!force && !isDeviceNotiOn()) return; // 알림 설정에서 기기 알림을 켜지 않은 경우 (시연용은 예외)
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) { await reg.showNotification(title, { body, icon: '/pwa-192x192.png', data: { open } }); return; }
@@ -410,9 +405,10 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
   };
   useEffect(() => { load(); }, []);
 
-  // 삭제한 루틴(종료일이 오늘 이전)은 목록에서 숨긴다
+  // 삭제한 루틴(종료일이 정해진 루틴)은 목록에서 숨긴다
+  // (오늘 이미 완료한 루틴은 종료일이 내일이라 달력엔 오늘까지 남지만, 관리 목록에서는 바로 사라짐)
   const today = getTodayStr();
-  const visibleRoutines = routines.filter((r: any) => !r.endDate || String(r.endDate).slice(0, 10) > today);
+  const visibleRoutines = routines.filter((r: any) => !r.endDate);
 
   const dayText = (days: string[]) => {
     const d = sortDays(days || []);
@@ -464,7 +460,7 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
             </div>
             <Pencil size={18} color="#b5b1bc" className="cursor-pointer" onClick={() => onEditRoutine(r)} />
             <Trash2 size={18} color="#ff4d4d" className="cursor-pointer" onClick={async () => {
-              if (!confirm('이 루틴을 삭제할까요?\n\n오늘부터 달력에서 사라지고, 지난 기록은 통계에 남아요.\n(오늘 이미 완료했다면 내일부터 사라져요)')) return;
+              if (!confirm('이 루틴을 앞으로의 일정에서 영영 삭제할까요?\n지난 기록은 삭제되지 않습니다.\n\n잠시 루틴을 쉬어가고 싶다면, 일시중지 기능으로 원하는 기간 동안 루틴을 멈춰보세요.')) return;
               await onDeleteRoutine(r.routineId, today);
               load();
             }} />
@@ -477,32 +473,29 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
 
 function NotiSettingsView({ setView, backTo = 'main' }: any) {
   const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
-  // 기기 알림(팝업)은 이 기기에만 저장. 기본값 꺼짐
-  const [deviceOn, setDeviceOn] = useState<boolean>(perm === 'granted' && isDeviceNotiOn());
-  // 알림 종류별 설정 (서버에 저장). 기본값 모두 꺼짐
+  // 기기 알림 = 전체 알림 스위치 (서버에 저장, 기본값 꺼짐)
+  // 끄면 아래 알림이 모두 꺼지고, 다시 켜면 이전에 정해둔 설정 그대로 돌아온다
+  const [deviceOn, setDeviceOn] = useState(false);
   const [settings, setSettings] = useState<any>({
     missionAlarmOn: false, missionAlarmTimes: ['08:00'],
-    todoAlarmOn: false, routineAlarmOn: false,
     goalAlarmOn: false, goalAlarmTime: '09:00',
   });
   const [loaded, setLoaded] = useState(false);
   const [dirty, setDirty] = useState(false);
+
+  const fromServer = (d: any) => ({
+    missionAlarmOn: !!d.missionAlarmOn,
+    missionAlarmTimes: Array.isArray(d.missionAlarmTimes) && d.missionAlarmTimes.length ? d.missionAlarmTimes : ['08:00'],
+    goalAlarmOn: !!d.goalAlarmOn,
+    goalAlarmTime: d.goalAlarmTime || '09:00',
+  });
 
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch(`${BASE_URL}/api/users/me`, { headers: authHeaders() });
         const d = res.ok ? await res.json() : null;
-        if (d) {
-          setSettings({
-            missionAlarmOn: !!d.missionAlarmOn,
-            missionAlarmTimes: Array.isArray(d.missionAlarmTimes) && d.missionAlarmTimes.length ? d.missionAlarmTimes : ['08:00'],
-            todoAlarmOn: !!d.todoAlarmOn,
-            routineAlarmOn: !!d.routineAlarmOn,
-            goalAlarmOn: !!d.goalAlarmOn,
-            goalAlarmTime: d.goalAlarmTime || '09:00',
-          });
-        }
+        if (d) { setDeviceOn(!!d.deviceAlarmOn); setSettings(fromServer(d)); }
       } catch { /* 기본값으로 표시 */ }
       finally { setLoaded(true); }
     })();
@@ -511,27 +504,29 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
   const change = (patch: any) => { setSettings((prev: any) => ({ ...prev, ...patch })); setDirty(true); };
   const times: string[] = settings.missionAlarmTimes;
 
-  const toggleDevice = async () => {
-    if (deviceOn) { setDeviceNotiOn(false); setDeviceOn(false); return; }
+  // 이 기기에서 브라우저 알림 허용 받기
+  const askPermission = async () => {
     if (typeof Notification === 'undefined') return alert('이 브라우저는 알림을 지원하지 않아요.');
     if (Notification.permission === 'denied') {
-      return alert('이 사이트의 알림이 브라우저에서 차단되어 있어요.\n\n주소창 왼쪽 아이콘 → 알림 → "허용"으로 바꾼 뒤 다시 켜주세요.');
+      return alert('이 사이트의 알림이 브라우저에서 차단되어 있어요.\n\n주소창 왼쪽 아이콘 → 알림 → "허용"으로 바꿔주세요.');
     }
-    if (Notification.permission === 'default') {
-      const result = await Notification.requestPermission();
-      setPerm(result);
-      if (result !== 'granted') return;
-    }
-    setDeviceNotiOn(true);
-    setDeviceOn(true);
+    if (Notification.permission === 'default') setPerm(await Notification.requestPermission());
+  };
 
-    // 기기 알림을 켜면 나머지 알림도 모두 켠다 (받기 싫은 것만 끄면 됨)
-    const allOn = { missionAlarmOn: true, todoAlarmOn: true, routineAlarmOn: true, goalAlarmOn: true };
-    setSettings((prev: any) => ({ ...prev, ...allOn }));
+  // 기기 알림 스위치는 누르는 즉시 저장
+  const toggleDevice = async () => {
+    const next = !deviceOn;
     try {
-      const res = await fetch(`${BASE_URL}/api/users/me/alarm-settings`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(allOn) });
-      if (!res.ok) setDirty(true); // 저장 실패 시 '저장' 버튼으로 다시 저장할 수 있게
-    } catch { setDirty(true); }
+      const res = await fetch(`${BASE_URL}/api/users/me/alarm-settings`, {
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ deviceAlarmOn: next }),
+      });
+      if (!res.ok) return alert(`저장에 실패했습니다.\n${await readError(res)}`);
+      setDeviceOn(next);
+      // 처음 켤 때 서버가 오늘의 미션·목표 리마인더를 켜주므로 그 결과를 반영 (저장 안 한 변경은 유지)
+      const d = await res.json().catch(() => null);
+      if (d && next && !dirty) setSettings(fromServer(d));
+    } catch { return alert('서버와 통신할 수 없습니다.'); }
+    if (next && typeof Notification !== 'undefined' && Notification.permission === 'default') await askPermission();
   };
 
   const addTime = () => {
@@ -557,18 +552,24 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
     setView(backTo);
   };
 
-  const section = (title: string, desc: string, on: boolean, onToggle: () => void, label: string, body?: any) => (
+  // locked: 기기 알림이 꺼져 있어서 꺼진 것으로 보이고 누를 수 없음 (정해둔 값은 그대로 기억)
+  const section = (title: string, desc: string, on: boolean, onToggle: () => void, label: string, body?: any, locked = false) => (
     <div className="noti-section">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-        <div>
+        <div style={{ opacity: locked ? 0.55 : 1 }}>
           <div className="noti-section-title">{title}</div>
           <div className="noti-section-desc">{desc}</div>
         </div>
-        <Toggle on={on} onClick={onToggle} label={label} />
+        <Toggle xs on={on && !locked} onClick={onToggle} label={label} disabled={locked} />
       </div>
-      {on && body}
+      {on && !locked && body}
     </div>
   );
+
+  const deviceDesc = !deviceOn ? '모든 알림을 받지 않아요'
+    : perm === 'granted' ? '알림을 받고 있어요'
+    : perm === 'denied' ? '이 기기는 브라우저에서 알림이 차단되어 있어요'
+    : '이 기기에서 알림 허용이 필요해요';
 
   return (
     <div className="card">
@@ -578,11 +579,13 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
         <span className="text-link" onClick={save}>저장</span>
       </div>
       <div className="scroll-content">
-        {section('기기 알림', deviceOn ? '이 기기에 알림 창을 띄워요' : perm === 'denied' ? '브라우저에서 차단됨' : '이 기기에 알림 창을 띄우지 않아요',
-          deviceOn, toggleDevice, '기기 알림')}
-
         {loaded && (
           <>
+            {section('기기 알림', deviceDesc, deviceOn, toggleDevice, '기기 알림',
+              perm === 'default' ? (
+                <button className="add-time-btn" onClick={askPermission}>이 기기에서 알림 허용하기</button>
+              ) : null)}
+
             {section('오늘의 미션 알림', '오늘 해야 할 미션의 개수를 알려드려요',
               settings.missionAlarmOn, () => change({ missionAlarmOn: !settings.missionAlarmOn }), '오늘의 미션 알림',
               <>
@@ -601,24 +604,18 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
                   <span className="add-time-icon"><Plus size={14} /></span>
                   시간 추가
                 </button>
-              </>)}
-
-            {section('할 일 알림', '알림을 설정한 할 일을 정한 시간에 알려드려요',
-              settings.todoAlarmOn, () => change({ todoAlarmOn: !settings.todoAlarmOn }), '할 일 알림')}
-
-            {section('루틴 알림', '알림을 설정한 루틴을 정한 시간에 알려드려요',
-              settings.routineAlarmOn, () => change({ routineAlarmOn: !settings.routineAlarmOn }), '루틴 알림')}
+              </>, !deviceOn)}
 
             {section('목표 리마인더 알림', '목표 마감일에 알림을 보내드려요',
               settings.goalAlarmOn, () => change({ goalAlarmOn: !settings.goalAlarmOn }), '목표 리마인더 알림',
               <div style={{ marginTop: '10px' }}>
                 <TimeSelect value={settings.goalAlarmTime} onChange={(v) => change({ goalAlarmTime: v })} />
-              </div>)}
+              </div>, !deviceOn)}
           </>
         )}
 
         <p className="field-hint" style={{ margin: '14px 4px 0', lineHeight: 1.6 }}>
-          할 일·루틴 알림 시점은 추가하거나 수정할 때 정할 수 있어요.<br />
+          할 일·루틴 알림은 추가하거나 수정할 때 정할 수 있어요.<br />
           알림은 이 앱이 열려 있을 때 화면에 떠요.
         </p>
       </div>
@@ -949,21 +946,24 @@ const formatAlarm = (m: number, startLabel: string) => {
   return `${m}분 전`;
 };
 // 할 일·루틴·목표에서 알림을 켜면, 알림 설정의 해당 종류도 자동으로 켠다
-const ensureAlarmTypeOn = async (type: 'todo' | 'routine' | 'goal') => {
-  const key = type === 'todo' ? 'todoAlarmOn' : type === 'routine' ? 'routineAlarmOn' : 'goalAlarmOn';
+// 목표에 리마인더를 켜면 알림 설정의 '목표 리마인더 알림'도 켠다
+// (할 일·루틴은 따로 스위치가 없고, 하나하나 정한 알림대로 온다)
+const ensureGoalAlarmOn = async () => {
   try {
-    await fetch(`${BASE_URL}/api/users/me/alarm-settings`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ [key]: true }) });
+    await fetch(`${BASE_URL}/api/users/me/alarm-settings`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ goalAlarmOn: true }) });
   } catch (e) { console.error('알림 설정 변경 실패', e); }
 };
 
 const toServerPriority = (p: string) => (p === 'normal' ? 'MEDIUM' : String(p || 'normal').toUpperCase());
 
 // 켜고 끄는 스위치
-function Toggle({ on, onClick, label, small = false }: { on: boolean; onClick: () => void; label: string; small?: boolean }) {
-  const w = small ? 34 : 44, h = small ? 20 : 26, k = small ? 14 : 20, pad = 3;
+function Toggle({ on, onClick, label, small = false, xs = false, disabled = false }: { on: boolean; onClick: () => void; label: string; small?: boolean; xs?: boolean; disabled?: boolean }) {
+  // xs: 기본 크기의 0.7배
+  const w = xs ? 31 : small ? 34 : 44, h = xs ? 18 : small ? 20 : 26, k = xs ? 14 : small ? 14 : 20, pad = xs ? 2 : 3;
   return (
-    <div role="switch" aria-checked={on} aria-label={label} onClick={onClick} className="cursor-pointer"
-         style={{ width: w, height: h, borderRadius: h / 2, background: on ? '#586589' : '#d9d7e0', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+    <div role="switch" aria-checked={on} aria-label={label} aria-disabled={disabled || undefined}
+         onClick={disabled ? undefined : onClick} className={disabled ? undefined : 'cursor-pointer'}
+         style={{ width: w, height: h, borderRadius: h / 2, background: on ? '#586589' : '#d9d7e0', position: 'relative', flexShrink: 0, transition: 'background 0.2s', opacity: disabled ? 0.5 : 1 }}>
       <div style={{ width: k, height: k, borderRadius: '50%', background: '#fff', position: 'absolute', top: pad, left: on ? w - k - pad : pad, transition: 'left 0.2s' }} />
     </div>
   );
@@ -1352,7 +1352,7 @@ function MainAppView({
     const routineList = sortItems(backendRoutines || []);
     const row = (key: string, title: string, time: any, done: boolean) => (
       <div key={key} className="mini-item">
-        <span className={`mini-dot ${done ? 'done' : ''}`}>{done && <Check size={9} strokeWidth={3} />}</span>
+        <span className="mini-check">{done && <Check size={12} strokeWidth={2.6} />}</span>
         <span className={`mini-title ${done ? 'done' : ''}`}>{title}</span>
         {time && <span className="mini-time">{String(time).slice(0, 5)}</span>}
       </div>
@@ -1590,10 +1590,10 @@ function MainAppView({
                   })}
                 </div>
               </div>
-              <div style={{ marginTop: '20px', fontWeight: '700', fontSize: '15px' }}>
+              <div style={{ marginTop: '20px', fontWeight: '700', fontSize: '15px', color: '#7a7680' }}>
                 {calMonth}월 {selectedCalendarDay}일 미션
               </div>
-              <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '500', color: '#7a7680' }}>
+              <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '500', color: '#6b6375' }}>
                 종합 미션 달성률 {missionProgress().rate}%
               </div>
               {/* 한 번 클릭: 그 날의 미션을 간략하게 보기만 (수정·완료는 더블클릭해서 여는 페이지에서) */}
@@ -1630,7 +1630,7 @@ function MainAppView({
               {filteredGoals.map((g:any) => {
                 const isSuccess = g.status === '성공';
                 const isFail = g.status === '실패';
-                const statusColor = isSuccess ? '#5aaf78' : isFail ? '#e3787d' : '#6c63ff';
+                const statusColor = isSuccess ? '#5aaf78' : isFail ? '#e3787d' : '#eba44c';
 
                 return (
                   <div key={`goal-${g.id}`} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', padding: '20px', background: '#fff', borderRadius: '20px', marginBottom: '16px', border: '1px solid #f1f0f5', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }} 
@@ -1642,7 +1642,7 @@ function MainAppView({
                        }}>
                     
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: (g.description || g.desc) ? '6px' : '16px' }}>
-                      <span style={{ fontSize: '16px', fontWeight: '700', color: '#1a191b' }}>{g.title}</span>
+                      <span style={{ fontSize: '16px', fontWeight: '700', color: '#2e2c33' }}>{g.title}</span>
                       <span style={{ color: statusColor, fontSize: '13px', fontWeight: '700' }}>{g.status}</span>
                     </div>
 
@@ -1818,13 +1818,13 @@ function MainAppView({
 
               {/* ===================== 루틴 ===================== */}
               <div style={{ background: '#fbfbff', border: '1px solid #efedfa', borderRadius: '20px', padding: '18px 16px', marginBottom: '28px' }}>
-                {sectionTitle(<Repeat size={22} strokeWidth={2.6} color="#aea9ff" style={{ transform: 'scaleX(0.9)' }} />, '루틴', `${thisYear}년`, '#6c63ff')}
+                {sectionTitle(<Repeat size={22} strokeWidth={2.5} color="#6c63ff" style={{ transform: 'scale(0.88, 1.18)' }} />, '루틴', `${thisYear}년`, '#6c63ff')}
 
                 <div className="stats-chart-title" style={{ marginLeft: '2px' }}>기간별 루틴 수행률</div>
                 <div className="filter-tabs" style={{ padding: 0, margin: '10px 0 6px', gap: '8px' }}>
-                  <button className={`chip ${period === 'day' ? 'active' : ''}`} onClick={() => setStatsPeriod('day')}>일간</button>
-                  <button className={`chip ${period === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
-                  <button className={`chip ${period === 'month' ? 'active' : ''}`} onClick={() => setStatsPeriod('month')}>월간</button>
+                  <button className={`chip chip-lavender ${period === 'day' ? 'active' : ''}`} onClick={() => setStatsPeriod('day')}>일간</button>
+                  <button className={`chip chip-lavender ${period === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
+                  <button className={`chip chip-lavender ${period === 'month' ? 'active' : ''}`} onClick={() => setStatsPeriod('month')}>월간</button>
                 </div>
                 {/* 그래프 제목의 0.7배, 얇게 */}
                 <div style={{ fontSize: '9px', fontWeight: '500', color: '#8e8a96', textAlign: 'left', marginLeft: '2px' }}>{periodDesc}</div>
@@ -2158,7 +2158,7 @@ function App() {
           notifyBefore: extra.notifyBefore ?? null,
         };
         const response = await fetch(`${BASE_URL}/api/routines`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
-        if (response.ok) { fetchBackendRoutines(); if (payload.notifyBefore !== null) ensureAlarmTypeOn('routine'); }
+        if (response.ok) { fetchBackendRoutines(); }
         else alert(`루틴 추가에 실패했습니다.\n\n${await readError(response)}`);
       } else {
         const todoPayload = {
@@ -2167,7 +2167,7 @@ function App() {
           notifyBefore: extra.notifyBefore ?? null,
         };
         const response = await fetch(`${BASE_URL}/api/todos`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(todoPayload) });
-        if (response.ok) { fetchTodos(); if (todoPayload.notifyBefore !== null) ensureAlarmTypeOn('todo'); }
+        if (response.ok) { fetchTodos(); }
         else alert(`할 일 추가에 실패했습니다.\n\n${await readError(response)}`);
       }
     } catch (error) { console.error(error); alert('서버와 통신할 수 없습니다.'); }
@@ -2220,7 +2220,7 @@ function App() {
       const response = await fetch(`${BASE_URL}/api/goals`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify(payload)
       });
-      if (response.ok) { fetchGoals(); if (remindOn) ensureAlarmTypeOn('goal'); return true; }
+      if (response.ok) { fetchGoals(); if (remindOn) ensureGoalAlarmOn(); return true; }
       // 서버가 알려준 실제 원인을 그대로 보여준다
       const msg = await readError(response);
       console.error('목표 추가 실패', response.status, msg, payload);
@@ -2248,7 +2248,7 @@ function App() {
           notifyBefore: extra.notifyBefore ?? null,
         })
       });
-      if (response.ok) { fetchTodos(); if (extra.notifyBefore !== null && extra.notifyBefore !== undefined) ensureAlarmTypeOn('todo'); }
+      if (response.ok) { fetchTodos(); }
       else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
@@ -2269,7 +2269,7 @@ function App() {
           notifyBefore: 'notifyBefore' in extra ? extra.notifyBefore : (r.notifyBefore ?? null),
         })
       });
-      if (response.ok) { fetchBackendRoutines(); if (extra.notifyBefore !== null && extra.notifyBefore !== undefined) ensureAlarmTypeOn('routine'); }
+      if (response.ok) { fetchBackendRoutines(); }
       else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
@@ -2284,7 +2284,7 @@ function App() {
         headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
         body: JSON.stringify({ title, category, description: desc, startDate, endDate, remindOn })
       });
-      if (res.ok) { fetchGoals(); if (remindOn) ensureAlarmTypeOn('goal'); return true; }
+      if (res.ok) { fetchGoals(); if (remindOn) ensureGoalAlarmOn(); return true; }
       const msg = await readError(res);
       console.error('목표 수정 실패', res.status, msg);
       alert(`목표 수정에 실패했습니다.\n\n${msg}`);
@@ -2443,7 +2443,7 @@ const fetchServerNotifications = async () => {
     } catch (e) { console.error('시연용 알림: 오늘 미션 조회 실패', e); }
 
     const desc = `오늘의 남은 미션은 ${remain}개 입니다.`;
-    await showDeviceNotification('오늘의 미션', desc, 'todo', true);
+    await showDeviceNotification('오늘의 미션', desc, 'todo');
     // 알림 목록에도 바로 보이게
     setNotifications((prev: any[]) => [
       { id: `demo-${Date.now()}`, type: 'mission', icon: '📋', title: '오늘의 미션', desc, time: formatNotiTime(new Date().toISOString()), unread: true },
