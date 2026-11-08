@@ -31,9 +31,9 @@ const isDeviceNotiOn = () => { try { return localStorage.getItem(DEVICE_NOTI_ON_
 const setDeviceNotiOn = (on: boolean) => {
   try { if (on) localStorage.setItem(DEVICE_NOTI_ON_KEY, '1'); else localStorage.removeItem(DEVICE_NOTI_ON_KEY); } catch { /* 저장 불가 */ }
 };
-const showDeviceNotification = async (title: string, body: string, open: string = 'todo') => {
+const showDeviceNotification = async (title: string, body: string, open: string = 'todo', force: boolean = false) => {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  if (!isDeviceNotiOn()) return; // 알림 설정에서 기기 알림을 켜지 않은 경우
+  if (!force && !isDeviceNotiOn()) return; // 알림 설정에서 기기 알림을 켜지 않은 경우 (시연용은 예외)
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) { await reg.showNotification(title, { body, icon: '/pwa-192x192.png', data: { open } }); return; }
@@ -198,14 +198,8 @@ function ErrorView({ setView }: { setView: SetView }) {
   );
 }
 
-function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, onOpenSettings }: any) {
-  const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
+function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, onOpenSettings, onDemo }: any) {
 
-  useEffect(() => {
-    if (typeof Notification === 'undefined') return;
-    const timer = setInterval(() => setPerm(Notification.permission), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const filteredNoti = (notifications || []).filter((n: any) => notiFilter === 'unread' ? n.unread : true);
   const unreadCount = (notifications || []).filter((n: any) => n.unread).length;
@@ -227,22 +221,10 @@ function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, o
       </div>
 
       <div className="scroll-content">
-        {perm !== 'granted' && typeof Notification !== 'undefined' && (
-          <button className="primary-button" style={{ marginBottom: '16px' }} onClick={async () => {
-            if (Notification.permission === 'granted') { setPerm('granted'); return; }
-            if (Notification.permission === 'denied') {
-              alert('이 사이트의 알림이 차단되어 있어요.\n\nEdge 주소창에 edge://settings/content/notifications 를 입력해서 localhost:5173을 "허용"으로 바꿔주세요.');
-              return;
-            }
-            const result = await Notification.requestPermission();
-            setPerm(result);
-          }}>🔔 기기 알림 켜기</button>
-        )}
-        {perm === 'granted' && (
-          <button className="primary-button" style={{ marginBottom: '16px', background: '#6c63ff' }} onClick={() => showDeviceNotification('테스트 알림', '알림이 정상적으로 동작합니다 🎉')}>
-            🔔 테스트 알림 보내기
-          </button>
-        )}
+        {/* 전시회 시연용: 오늘 남은 미션 개수 알림을 바로 보냄 (기기 알림 설정과 상관없이) */}
+        <button className="primary-button" style={{ marginBottom: '16px', background: '#6c63ff' }} onClick={onDemo}>
+          🔔 시연용 테스트 알림 보내기
+        </button>
 
         <div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>최근 알림</div>
         {filteredNoti.length === 0 && (
@@ -542,6 +524,14 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
     }
     setDeviceNotiOn(true);
     setDeviceOn(true);
+
+    // 기기 알림을 켜면 나머지 알림도 모두 켠다 (받기 싫은 것만 끄면 됨)
+    const allOn = { missionAlarmOn: true, todoAlarmOn: true, routineAlarmOn: true, goalAlarmOn: true };
+    setSettings((prev: any) => ({ ...prev, ...allOn }));
+    try {
+      const res = await fetch(`${BASE_URL}/api/users/me/alarm-settings`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(allOn) });
+      if (!res.ok) setDirty(true); // 저장 실패 시 '저장' 버튼으로 다시 저장할 수 있게
+    } catch { setDirty(true); }
   };
 
   const addTime = () => {
@@ -1242,7 +1232,7 @@ function MainAppView({
   const [failReasons, setFailReasons] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'time' | 'priority'>('time');
   // 실패 원인 문구를 고를 때 쓰는 값 (통계를 볼 때마다 바뀌지 않게 한 번만 정함)
-  const [failMsgSeed] = useState(() => Math.random());
+  const [failMsgSeed, setFailMsgSeed] = useState(() => Math.random());
   // 달력에서 날짜를 더블클릭하면 열리는 '그 날짜의 미션' 페이지 (하단 탭은 달력 그대로)
   const [dayPageOpen, setDayPageOpen] = useState(false);
   // 달력 상단의 연도·월 선택 창
@@ -1253,6 +1243,7 @@ function MainAppView({
     setDayPageOpen(false);
     setPickerOpen(null);
     if (tab === 'todo') setGlobalDate(getTodayStr());
+    if (tab === 'stats') setFailMsgSeed(Math.random());
     setActiveTab(tab);
   };
 
@@ -1630,7 +1621,7 @@ function MainAppView({
               {filteredGoals.map((g:any) => {
                 const isSuccess = g.status === '성공';
                 const isFail = g.status === '실패';
-                const statusColor = isSuccess ? '#28a745' : isFail ? '#dc3545' : '#6c63ff';
+                const statusColor = isSuccess ? '#5aaf78' : isFail ? '#e3787d' : '#6c63ff';
 
                 return (
                   <div key={`goal-${g.id}`} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', padding: '20px', background: '#fff', borderRadius: '20px', marginBottom: '16px', border: '1px solid #f1f0f5', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }} 
@@ -1763,7 +1754,7 @@ function MainAppView({
         const failMessage = causeMsgs.length ? causeMsgs[Math.floor(failMsgSeed * causeMsgs.length) % causeMsgs.length] : '';
 
         // 막대 색
-        const routineCatColors = barColorsByRank(routineCats.map(c => c.rate), '#6c63ff', AMBER);
+        const routineCatColors = barColorsByRank(routineCats.map(c => c.rate), '#ff8a8a', AMBER);
         const goalCatColors = barColorsByRank(goalCats.map(c => c.rate), '#5b678c', '#c5cbe0');
         const failColors = barColorsByRank(dynamicFailData.map(f => f.rate), '#ff8a8a', AMBER);
 
@@ -1772,7 +1763,7 @@ function MainAppView({
 
         const sectionTitle = (icon: any, text: string, sub: string, color: string) => (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 14px 2px' }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: '10px', background: color + '1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
+            <div style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: '15px', fontWeight: '800', color: '#1a191b', lineHeight: 1.2 }}>{text}</div>
               <div style={{ fontSize: '11px', fontWeight: '600', color: color }}>{sub}</div>
@@ -1818,9 +1809,9 @@ function MainAppView({
 
               {/* ===================== 루틴 ===================== */}
               <div style={{ background: '#fbfbff', border: '1px solid #efedfa', borderRadius: '20px', padding: '18px 16px', marginBottom: '28px' }}>
-                {sectionTitle(<Repeat size={16} color="#6c63ff" />, '루틴', `${thisYear}년`, '#6c63ff')}
+                {sectionTitle(<Repeat size={22} strokeWidth={2.6} color="#aea9ff" style={{ transform: 'scaleX(0.9)' }} />, '루틴', `${thisYear}년`, '#6c63ff')}
 
-                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', marginLeft: '2px' }}>기간별 루틴 수행률</div>
+                <div className="stats-chart-title" style={{ marginLeft: '2px' }}>기간별 루틴 수행률</div>
                 <div className="filter-tabs" style={{ padding: 0, margin: '10px 0 6px', gap: '8px' }}>
                   <button className={`chip ${period === 'day' ? 'active' : ''}`} onClick={() => setStatsPeriod('day')}>일간</button>
                   <button className={`chip ${period === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
@@ -1843,7 +1834,7 @@ function MainAppView({
                   })}
                 </div>
 
-                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', margin: '26px 0 10px 2px' }}>카테고리별 루틴 수행률</div>
+                <div className="stats-chart-title" style={{ margin: '26px 0 10px 2px' }}>카테고리별 루틴 수행률</div>
                 <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
                   {routineCats.length === 0
                     ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>아직 기록이 없어요.</div>
@@ -1870,16 +1861,16 @@ function MainAppView({
 
               {/* ===================== 목표 ===================== */}
               <div style={{ background: '#fbfcff', border: '1px solid #e9edf6', borderRadius: '20px', padding: '18px 16px', marginBottom: '20px' }}>
-                {sectionTitle(<Flag size={16} color="#5b678c" />, '목표', `${thisYear}년`, '#5b678c')}
+                {sectionTitle(<Flag size={22} strokeWidth={2.6} color="#5b678c" />, '목표', `${thisYear}년`, '#5b678c')}
 
-                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', marginLeft: '2px' }}>카테고리별 목표 달성률</div>
+                <div className="stats-chart-title" style={{ marginLeft: '2px' }}>카테고리별 목표 달성률</div>
                 <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5', marginTop: '10px' }}>
                   {goalCats.length === 0
                     ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>올해 등록한 목표가 없어요.</div>
                     : goalCats.map((c, i) => barRow(c.name, c.rate, c.done > 0 ? `성공 ${c.success}/완료 ${c.done}` : `진행중 ${c.total}`, goalCatColors[i]))}
                 </div>
 
-                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', margin: '26px 0 10px 2px' }}>실패 원인 분석</div>
+                <div className="stats-chart-title" style={{ margin: '26px 0 10px 2px' }}>실패 원인 분석</div>
                 <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
                   {failedGoals.length === 0
                     ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>올해 실패로 기록된 목표가 없어요.</div>
@@ -1889,7 +1880,7 @@ function MainAppView({
                 {/* 실패 원인 레포트 (목표 색에 맞춘 남색 계열). 실패 기록이 없으면 표시하지 않음 */}
                 {topFailNames.length > 0 && (
                   <div className="goal-summary">
-                    <div className="goal-summary-head">트래커님의 목표 실패 원인은 {topFailNames.join(', ')}!</div>
+                    <div className="goal-summary-head">트래커님의 주된 목표 실패 원인은 {topFailNames.join(', ')}!</div>
                     <div className="goal-summary-body">{failMessage}</div>
                   </div>
                 )}
@@ -2415,6 +2406,42 @@ const fetchServerNotifications = async () => {
     }
   };
 
+  // 시연용 테스트 알림: 오늘의 남은 미션 개수를 바로 알림으로 보낸다
+  const sendDemoNotification = async () => {
+    if (typeof Notification === 'undefined') return alert('이 브라우저는 알림을 지원하지 않아요.');
+    if (Notification.permission === 'denied') {
+      return alert('이 사이트의 알림이 브라우저에서 차단되어 있어요.\n\n주소창 왼쪽 아이콘 → 알림 → "허용"으로 바꿔주세요.');
+    }
+    if (Notification.permission !== 'granted') {
+      const result = await Notification.requestPermission();
+      if (result !== 'granted') return alert('브라우저 알림을 허용해야 시연할 수 있어요.');
+    }
+    const today = getTodayStr();
+    let remain = 0;
+    try {
+      const [tRes, rRes, recRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/todos?date=${today}`, { headers: authHeaders() }),
+        fetch(`${BASE_URL}/api/routines/list?date=${today}`, { headers: authHeaders() }),
+        fetch(`${BASE_URL}/api/records?date=${today}`, { headers: authHeaders() }),
+      ]);
+      const todayTodos = tRes.ok ? await tRes.json() : [];
+      const todayRoutines = rRes.ok ? await rRes.json() : [];
+      const todayRecords = recRes.ok ? await recRes.json() : [];
+      const doneRoutineIds = new Set((Array.isArray(todayRecords) ? todayRecords : [])
+        .filter((r: any) => r.completed !== false).map((r: any) => r.routineId));
+      remain = (Array.isArray(todayTodos) ? todayTodos : []).filter((t: any) => !(t.completed || t.isCompleted || t.done)).length
+        + (Array.isArray(todayRoutines) ? todayRoutines : []).filter((r: any) => !doneRoutineIds.has(r.routineId)).length;
+    } catch (e) { console.error('시연용 알림: 오늘 미션 조회 실패', e); }
+
+    const desc = `오늘의 남은 미션은 ${remain}개 입니다.`;
+    await showDeviceNotification('오늘의 미션', desc, 'todo', true);
+    // 알림 목록에도 바로 보이게
+    setNotifications((prev: any[]) => [
+      { id: `demo-${Date.now()}`, type: 'mission', icon: '📋', title: '오늘의 미션', desc, time: formatNotiTime(new Date().toISOString()), unread: true },
+      ...prev,
+    ]);
+  };
+
   const handleReadNotification = async (n: any) => {
   setNotifications((prev: any[]) => prev.map((item: any) => item.id === n.id ? { ...item, unread: false } : item));
   if (n.serverId && n.unread) {
@@ -2467,6 +2494,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
           setNotiFilter={setNotiFilter} 
           onRead={handleReadNotification}
           onOpenSettings={() => { setNotiSettingsBack('noti'); setView('noti-settings'); }}
+          onDemo={sendDemoNotification}
         />
       )}
       
