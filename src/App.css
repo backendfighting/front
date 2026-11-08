@@ -10,6 +10,13 @@
   box-sizing: border-box;
 }
 
+/* 이 앱은 밝은 화면만 쓴다. 컴퓨터가 다크 모드여도 날짜 칸의 달력 아이콘 등이 흰색으로 바뀌어 안 보이는 일이 없게 */
+.container { color-scheme: light; }
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.75; cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
 /* 피그마 규격 고정 프레임 모바일 박스 */
 .card {
   background: white;
@@ -115,7 +122,7 @@ input, select, textarea {
 }
 .chip.active { background: #586589; color: white; }
 /* 통계 기간 버튼(일간·주간·월간): 연보라 */
-.chip.chip-lavender.active { background: #958ef4; color: white; }
+.chip.chip-lavender.active { background: #7f77f2; color: white; }
 
 /* 고정식 네비게이션 시스템 */
 .bottom-nav {
@@ -509,3 +516,43 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
 
 /* 통계 그래프 제목 */
 .stats-chart-title { font-size: 13px; font-weight: 700; text-align: left; color: #45424b; }
+
+/* 통계 그래프 설명 (그래프 제목의 0.7배, 얇게) */
+.stats-chart-desc { font-size: 9px; font-weight: 500; color: #8e8a96; text-align: left; margin-left: 2px; white-space: pre-line; line-height: 1.5; }
+/* 연간 그래프: 막대를 누르면 그 해 기록 */
+.year-bar { cursor: pointer; border-radius: 8px; }
+.year-bar:hover { background: #f6f5ff; }
+/* 지난 연도를 보고 있을 때 맨 위 안내 */
+.past-year-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: #f1efff; border-radius: 14px; padding: 10px 12px; margin-bottom: 14px;
+  font-size: 12.5px; color: #5a50d6; text-align: left;
+}
+.past-year-bar button {
+  border: none; background: #fff; color: #5a50d6; font-size: 11.5px; font-weight: 700;
+  padding: 6px 10px; border-radius: 10px; cursor: pointer; flex-shrink: 0;
+}
+/* 지난 연도 목표 목록 (통계, 보기 전용) */
+.past-goal { padding: 12px 0; border-bottom: 1px solid #f4f3f8; text-align: left; }
+.past-goal:last-child { border-bottom: none; }
+.past-goal-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.past-goal-title { font-size: 13.5px; font-weight: 700; color: #2e2c33; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.past-goal-reason { font-size: 11px; color: #8e8a96; margin-top: 4px; }
+.past-goal-date { font-size: 9px; color: #b5b1bc; margin-top: 4px; }
+
+/* 목표 탭: 새해 안내 */
+.year-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: #eef1f8; border: 1px solid #e1e6f2; border-radius: 16px;
+  padding: 12px 12px 12px 16px; margin-bottom: 16px; cursor: pointer; text-align: left;
+}
+.year-banner-text { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #5b678c; line-height: 1.5; }
+.year-banner-text b { font-size: 13px; color: #3f4a6b; }
+.year-banner-close {
+  border: none; background: transparent; color: #9aa3bd; cursor: pointer;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0;
+}
+/* 목표 마감 배지 */
+.goal-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px; flex-shrink: 0; white-space: nowrap; }
+.goal-badge.dday { background: #fdebe3; color: #e0703f; }
+.goal-badge.overdue { background: #efedff; color: #6c63ff; }
