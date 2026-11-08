@@ -113,15 +113,33 @@ function RegisterView({ setView }: any) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name: nickname }),
       });
-      if (response.ok) {
-        alert('회원가입을 축하합니다! 로그인을 진행해주세요.');
-        setView('login');
-      } else {
-        alert('회원가입에 실패했습니다.');
+      if (!response.ok) {
+        alert(await readError(response));
+        return;
       }
+      alert('회원가입이 정상적으로 완료되었습니다!');
+
+      // 가입한 정보로 바로 로그인까지 진행
+      const loginRes = await fetch(`${BASE_URL}/api/users/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        credentials: 'include',
+      });
+      if (loginRes.ok) {
+        const data = await loginRes.json();
+        const token = data.token || data.accessToken;
+        if (token) {
+          localStorage.setItem('token', token);
+          setView('main');
+          return;
+        }
+      }
+      // 자동 로그인이 안 되면 로그인 화면으로
+      setView('login');
     } catch (error) {
       console.error(error);
-      alert('서버 통신 실패');
+      alert('서버와 통신할 수 없습니다. 백엔드가 켜져 있는지 확인해주세요.');
     }
   };
 
@@ -134,8 +152,8 @@ function RegisterView({ setView }: any) {
       </div>
       <div className="scroll-content" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 230px)', paddingBottom: '20px' }}>
         <div style={{ textAlign: 'left', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0' }}>새로운 시작을 함께해요</h2>
-          <p style={{ fontSize: '13px', color: '#b5b1bc' }}>간단한 정보를 입력하고 서비스를 시작하세요.</p>
+          <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0', color: '#1a191b' }}>새로운 시작을 함께해요</h2>
+          <p style={{ fontSize: '13px', color: '#7a7680' }}>간단한 정보를 입력하고 서비스를 시작하세요.</p>
         </div>
         <div className="input-group"><label>이메일</label><input type="email" placeholder="example@email.com" value={email} onChange={(e)=>setEmail(e.target.value)} /></div>
         <div className="input-group"><label>비밀번호</label><input type="password" placeholder="비밀번호를 입력하세요" value={password} onChange={(e)=>setPassword(e.target.value)} /></div>
@@ -492,6 +510,14 @@ const DAY_OPTIONS = [
 const ALL_DAYS = DAY_OPTIONS.map(d => d.v);
 const sortDays = (days: string[]) => ALL_DAYS.filter(d => days.includes(d));
 
+const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
+
+// 루틴과 목표가 함께 쓰는 카테고리
+const CATEGORIES = ['공부', '업무', '운동', '건강', '취미', '자기 관리', '생활 습관', '기타'];
+// 예전에 저장된 카테고리(독서 등)도 목록에서 사라지지 않도록
+const categoryOptions = (current?: string) =>
+  current && !CATEGORIES.includes(current) ? [current, ...CATEGORIES] : CATEGORIES;
+
 // 시간 선택용 (오전/오후 + 12시간)
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const BASE_MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
@@ -519,9 +545,11 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
   const [memo, setMemo] = useState(editingItem?.description || '');
   const [date, setDate] = useState(editingItem?.todoDate || globalDate);
   const [time, setTime] = useState(editingItem?.todoTime ? String(editingItem.todoTime).slice(0, 5) : '14:00');
+  // 기본값은 '보통'
   const [priority, setPriority] = useState(
-    editingItem?.priority === 'LOW' ? 'low' : editingItem?.priority === 'MEDIUM' ? 'normal' : 'high'
+    editingItem?.priority === 'HIGH' ? 'high' : editingItem?.priority === 'LOW' ? 'low' : 'normal'
   );
+  const [category, setCategory] = useState(editingItem?.category || '공부');
   const [type, setType] = useState(isRoutineEdit ? 'routine' : 'todo');
   const [repeatDays, setRepeatDays] = useState<string[]>(
     Array.isArray(editingItem?.repeatDays) ? sortDays(editingItem.repeatDays) : []
@@ -549,9 +577,9 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
       if (!isRealDate(date)) return alert('날짜를 다시 확인해주세요. 달력에 없는 날짜입니다.');
       if (!isRealTime(time)) return alert('시간을 다시 확인해주세요. 존재하지 않는 시간입니다.');
     }
-    if (isRoutineEdit) onUpdateRoutine(editingItem, title, memo, repeatDays);
+    if (isRoutineEdit) onUpdateRoutine(editingItem, title, memo, repeatDays, category);
     else if (isEdit) onUpdateTodo(editingItem.todoId || editingItem.id, title, memo, date, time, priority);
-    else onAddTodo(title, memo, date, time, priority, type, repeatDays);
+    else onAddTodo(title, memo, date, time, priority, type, repeatDays, category);
     setView('main');
   };
 
@@ -592,6 +620,10 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
               <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(0, 5))}>평일</button>
               <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(5))}>주말</button>
             </div>
+            <label style={{ marginTop: '20px' }}>카테고리</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {categoryOptions(editingItem?.category).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
         ) : (
           <>
@@ -617,9 +649,6 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
 
             <div className="input-group">
               <label>⭐ 중요도</label>
-              <p style={{ fontSize: '12px', color: '#b5b1bc', margin: '0 0 8px 0' }}>
-                이 할 일이 얼마나 급한지 골라주세요. 목록에서 중요도 순으로 정렬할 때 쓰여요.
-              </p>
               <div className="filter-tabs">
                 {['high', 'normal', 'low'].map(p => (
                   <button key={p} className={`chip ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
@@ -638,7 +667,7 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
 function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate }: any) {
   const isEdit = !!editingGoal;
   const [title, setTitle] = useState(editingGoal?.title || '');
-  const [category, setCategory] = useState(editingGoal?.category || '운동');
+  const [category, setCategory] = useState(editingGoal?.category || '공부');
   const [desc, setDesc] = useState(editingGoal?.desc || editingGoal?.description || '');
   const [startDate, setStartDate] = useState(editingGoal?.startDate || globalDate);
   const [endDate, setEndDate] = useState(editingGoal?.endDate || globalDate);
@@ -676,7 +705,7 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
         <div className="input-group">
           <label>카테고리</label>
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option>운동</option><option>공부</option><option>독서</option><option>기타</option>
+            {categoryOptions(editingGoal?.category).map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 
@@ -729,6 +758,18 @@ function MainAppView({
   
   const [failReasons, setFailReasons] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'time' | 'priority'>('time');
+  // 달력에서 날짜를 더블클릭하면 열리는 '그 날짜의 미션' 페이지 (하단 탭은 달력 그대로)
+  const [dayPageOpen, setDayPageOpen] = useState(false);
+  // 달력 상단의 연도·월 선택 창
+  const [pickerOpen, setPickerOpen] = useState<'year' | 'month' | null>(null);
+
+  // 오늘의 미션 탭은 언제나 오늘 날짜만 보여준다
+  const goTab = (tab: string) => {
+    setDayPageOpen(false);
+    setPickerOpen(null);
+    if (tab === 'todo') setGlobalDate(getTodayStr());
+    setActiveTab(tab);
+  };
 
   const targetDateObj = new Date(globalDate || getTodayStr());
   const calYear = targetDateObj.getFullYear();
@@ -787,20 +828,23 @@ function MainAppView({
 
     return (
       <div key={`todo-${id}`} className="list-item">
-        <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1 }} onClick={() => onToggleTodo(id)}>
-          {isDone ? 
-            <CheckCircle2 size={22} color="#6c63ff" style={{ marginRight: 12 }} /> : 
-            <Circle size={22} color="#e5e4e7" style={{ marginRight: 12 }} />
+        <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }} onClick={() => onToggleTodo(id)}>
+          {isDone ?
+            <CheckCircle2 size={22} color="#6c63ff" style={{ marginRight: 12, flexShrink: 0 }} /> :
+            <Circle size={22} color="#e5e4e7" style={{ marginRight: 12, flexShrink: 0 }} />
           }
-          <span style={{ fontWeight: '600', textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>
-            {t.title}
-          </span>
-          {t.todoTime && (
-            <span style={{ fontSize: '12px', color: '#b5b1bc', marginLeft: '8px', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {String(t.todoTime).slice(0, 5)}
+          {/* 시간·중요도는 제목 위에 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {t.todoTime && (
+                <span className="item-meta">{String(t.todoTime).slice(0, 5)}</span>
+              )}
+              <span className={`priority-badge ${priorityClass}`} style={t.todoTime ? undefined : { marginLeft: 0 }}>{priorityText}</span>
+            </div>
+            <span className="item-title" style={{ textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>
+              {t.title}
             </span>
-          )}
-          <span className={`priority-badge ${priorityClass}`}>{priorityText}</span>
+          </div>
         </div>
         <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditTodo(t); }} />
         <Trash2 size={18} className="cursor-pointer" color="#b5b1bc" onClick={(e) => {
@@ -847,18 +891,21 @@ function MainAppView({
 
         return (
           <div key={`routine-${id}`} className="list-item">
-            <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1 }} onClick={() => onToggleBackendRoutine(id)}>
+            <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }} onClick={() => onToggleBackendRoutine(id)}>
               {isDone ?
-                <CheckCircle2 size={22} color="#6c63ff" style={{ marginRight: 12 }} /> :
-                <Circle size={22} color="#e5e4e7" style={{ marginRight: 12 }} />
+                <CheckCircle2 size={22} color="#6c63ff" style={{ marginRight: 12, flexShrink: 0 }} /> :
+                <Circle size={22} color="#e5e4e7" style={{ marginRight: 12, flexShrink: 0 }} />
               }
-              <span style={{ fontWeight: '600', textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>{title}</span>
-              {r.todoTime && (
-                <span style={{ fontSize: '12px', color: '#b5b1bc', marginLeft: '8px', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {String(r.todoTime).slice(0, 5)}
-                </span>
-              )}
-              {pText && <span className={`priority-badge ${pClass}`}>{pText}</span>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+                {(r.todoTime || pText || r.category) && (
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {r.todoTime && <span className="item-meta">{String(r.todoTime).slice(0, 5)}</span>}
+                    {r.category && <span className="item-meta">{r.category}</span>}
+                    {pText && <span className={`priority-badge ${pClass}`}>{pText}</span>}
+                  </div>
+                )}
+                <span className="item-title" style={{ textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>{title}</span>
+              </div>
             </div>
             <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditRoutine(r); }} />
             <Trash2 size={18} className="cursor-pointer" color="#b5b1bc" onClick={(e) => {
@@ -868,6 +915,11 @@ function MainAppView({
           </div>
         );
       })}
+
+      {/* 추가 버튼이 마지막 루틴의 수정·삭제 버튼을 가리지 않도록 넉넉히 비워둔다 */}
+      <div style={{ textAlign: 'center', color: '#c9c5d0', fontSize: '12px', fontWeight: '600', lineHeight: 1.8, padding: '64px 0 130px' }}>
+        꾸준한 실천으로 만드는 갓생 루틴!<br />Goal Tracker가 응원합니다.
+      </div>
     </>
   );
   };
@@ -904,13 +956,13 @@ function MainAppView({
           <>
             <div className="header-row">
               <Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} />
-              <h3 className="header-title">오늘의 미션 <span style={{fontSize:'13px', color:'#6c63ff', marginLeft:'8px'}}>{calMonth}/{selectedCalendarDay}</span></h3>
+              <h3 className="header-title">오늘의 미션 <span style={{fontSize:'13px', color:'#6c63ff', marginLeft:'8px'}}>{calMonth}/{selectedCalendarDay} {WEEKDAY_KO[targetDateObj.getDay()]}</span></h3>
               <Bell size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenNoti} />
             </div>
             {renderFilterBar()}
             <div className="scroll-content">
               <div className="dashboard-card" style={{ background: '#f5f4ff', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '32px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '700', color: '#6c63ff' }}>해당 일자 미션 종합 달성도</span>
+                <span style={{ fontSize: '13px', fontWeight: '700', color: '#6c63ff' }}>오늘의 미션 종합 달성도</span>
                 <h3 style={{ fontSize: '26px', fontWeight: '800', margin: '8px 0 6px 0', color: '#1a191b' }}>{liveProgress}% 완료</h3>
                 <span style={{ fontSize: '13px', color: '#7a7680', fontWeight: '600' }}>남은 미션: {remainCount}개</span>
               </div>
@@ -925,34 +977,86 @@ function MainAppView({
         const todayObj = new Date();
         const isTodayInView = todayObj.getFullYear() === calYear && todayObj.getMonth() + 1 === calMonth;
         const todayDayNum = todayObj.getDate();
+
+        // 달력에서 날짜를 더블클릭해서 들어온 '그 날짜의 미션' 페이지
+        if (dayPageOpen) {
+          return (
+            <>
+              <div className="header-row">
+                <ChevronLeft size={22} className="cursor-pointer" color="#4e4b52" onClick={() => setDayPageOpen(false)} />
+                <h3 className="header-title">
+                  {calMonth}/{selectedCalendarDay} ({WEEKDAY_KO[targetDateObj.getDay()]}) 미션
+                </h3>
+                <Bell size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenNoti} />
+              </div>
+              <div className="scroll-content">
+                {renderMissionLists(true)}
+              </div>
+              <div className="fab" onClick={() => setView('todo-add')}><Plus /></div>
+            </>
+          );
+        }
+
+        // 연도·월 바로가기 목록
+        const YEAR_CHOICES = Array.from({ length: 11 }, (_, i) => todayObj.getFullYear() - 5 + i);
+        const MONTH_CHOICES = Array.from({ length: 12 }, (_, i) => i + 1);
+        const jumpTo = (y: number, m: number) => {
+          const lastDay = new Date(y, m, 0).getDate();
+          const d = Math.min(selectedCalendarDay, lastDay);
+          setGlobalDate(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+          setPickerOpen(null);
+        };
+
         return (
           <>
             <div className="header-row"><Menu size={22} className="cursor-pointer" onClick={onOpenMenu} /><h3 className="header-title">달력</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
             <div className="scroll-content">
-              <div style={{ background: '#fbfbff', border: '1px solid #f1f0f5', borderRadius: '24px', padding: '16px' }}>
+              <div style={{ background: '#fbfbff', border: '1px solid #f1f0f5', borderRadius: '24px', padding: '16px', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <button className="chip" onClick={handlePrevMonth}>이전 달</button>
-                  <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700' }}>{calYear}년 {calMonth}월</h4>
-                  <button className="chip" onClick={handleNextMonth}>다음 달</button>
+                  <button className="chip" onClick={() => { setPickerOpen(null); handlePrevMonth(); }}>이전 달</button>
+                  {/* 연도와 월을 눌러 바로 이동 */}
+                  <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', display: 'flex', gap: '6px' }}>
+                    <span className="date-picker-btn" onClick={() => setPickerOpen(pickerOpen === 'year' ? null : 'year')}>{calYear}년</span>
+                    <span className="date-picker-btn" onClick={() => setPickerOpen(pickerOpen === 'month' ? null : 'month')}>{calMonth}월</span>
+                  </h4>
+                  <button className="chip" onClick={() => { setPickerOpen(null); handleNextMonth(); }}>다음 달</button>
                 </div>
+
+                {pickerOpen && (
+                  <>
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 5 }} onClick={() => setPickerOpen(null)} />
+                    <div className="date-picker-pop">
+                      {(pickerOpen === 'year' ? YEAR_CHOICES : MONTH_CHOICES).map(v => {
+                        const active = pickerOpen === 'year' ? v === calYear : v === calMonth;
+                        return (
+                          <button key={v} className={`chip ${active ? 'active' : ''}`} style={{ padding: '8px 0', fontSize: '13px' }}
+                                  onClick={() => pickerOpen === 'year' ? jumpTo(v, calMonth) : jumpTo(calYear, v)}>
+                            {pickerOpen === 'year' ? v : `${v}월`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
                 <div className="calendar-grid">
                   {['일', '월', '화', '수', '목', '금', '토'].map(d => <div key={d} className="calendar-day-header">{d}</div>)}
                   {Array(firstDayIndex).fill(null).map((_, i) => <div key={`e-${i}`} className="calendar-cell empty"></div>)}
                   {Array(daysInMonth).fill(null).map((_, i) => {
                     const dayNum = i + 1;
                     const isToday = isTodayInView && dayNum === todayDayNum;
+                    const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
                     return (
                       <div key={dayNum} className={`calendar-cell ${dayNum === selectedCalendarDay ? 'active' : ''}`}
+                           title="더블클릭하면 그 날짜의 미션이 열려요"
                            style={isToday ? {
                              border: '2px solid #6c63ff',
                              flexDirection: 'column',
-                             gap: '1px',
+                             gap: '3px',
                              lineHeight: 1,
                            } : undefined}
-                           onClick={() => {
-                             const newDateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-                             setGlobalDate(newDateStr);
-                           }}>
+                           onClick={() => setGlobalDate(dateStr)}
+                           onDoubleClick={() => { setGlobalDate(dateStr); setDayPageOpen(true); }}>
                         {dayNum}
                         {/* 오늘 날짜 표시 */}
                         {isToday && (
@@ -1150,17 +1254,17 @@ function MainAppView({
       <Fragment key={activeTab}>{renderTabContent()}</Fragment>
 
       <div className="bottom-nav" style={{ justifyContent: 'space-around' }}>
-        <div className={`nav-item ${activeTab === 'todo' ? 'active' : ''}`} onClick={() => setActiveTab('todo')}><ClipboardList size={22} /><span>오늘의 미션</span></div>
-        <div className={`nav-item ${activeTab === 'calendar' ? 'active' : ''}`} onClick={() => setActiveTab('calendar')}><Calendar size={22} /><span>달력</span></div>
-        <div className={`nav-item ${activeTab === 'goal' ? 'active' : ''}`} onClick={() => setActiveTab('goal')}><Flag size={22} /><span>목표</span></div>
-        <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><BarChart2 size={22} /><span>통계</span></div>
+        <div className={`nav-item ${activeTab === 'todo' ? 'active' : ''}`} onClick={() => goTab('todo')}><ClipboardList size={22} /><span>오늘의 미션</span></div>
+        <div className={`nav-item ${activeTab === 'calendar' ? 'active' : ''}`} onClick={() => goTab('calendar')}><Calendar size={22} /><span>달력</span></div>
+        <div className={`nav-item ${activeTab === 'goal' ? 'active' : ''}`} onClick={() => goTab('goal')}><Flag size={22} /><span>목표</span></div>
+        <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => goTab('stats')}><BarChart2 size={22} /><span>통계</span></div>
       </div>
 
       {showGoalResult && (
         <div className="bottom-sheet-overlay" onClick={() => setShowGoalResult(false)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-handle"></div>
-            <h3 style={{ fontSize: '18px', fontWeight: '700' }}>결과 상태 업데이트</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1a191b' }}>결과 상태 업데이트</h3>
             <div className="result-toggle-group">
               <button className={`result-btn success ${resultType === 'success' ? 'active' : ''}`} onClick={() => setResultType('success')}><Check size={16} /> 성공</button>
               <button className={`result-btn fail ${resultType === 'fail' ? 'active' : ''}`} onClick={() => setResultType('fail')}><X size={16} /> 실패</button>
@@ -1381,11 +1485,11 @@ function App() {
     }
   };
 
-  const handleAddTodo = async (title: string, memo: string, date: string, time: string, priority: string, type: string, repeatDays: string[] = []) => {
+  const handleAddTodo = async (title: string, memo: string, date: string, time: string, priority: string, type: string, repeatDays: string[] = [], category: string = '기타') => {
     const token = localStorage.getItem('token');
     try {
       if (type === 'routine') {
-        const payload = { title, description: memo, category: '기본', repeatDays: repeatDays.length ? sortDays(repeatDays) : ALL_DAYS };
+        const payload = { title, description: memo, category, repeatDays: repeatDays.length ? sortDays(repeatDays) : ALL_DAYS };
         const response = await fetch(`${BASE_URL}/api/routines`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify(payload)
         });
@@ -1477,14 +1581,14 @@ function App() {
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
 
-  const handleUpdateRoutine = async (r: any, title: string, memo: string, repeatDays: string[] = []) => {
+  const handleUpdateRoutine = async (r: any, title: string, memo: string, repeatDays: string[] = [], category?: string) => {
     const token = localStorage.getItem('token');
     const id = r.routineId || r.id;
     try {
       const response = await fetch(`${BASE_URL}/api/routines/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ title, description: memo, category: r.category || '기본', repeatDays: repeatDays.length ? sortDays(repeatDays) : (r.repeatDays || ALL_DAYS) })
+        body: JSON.stringify({ title, description: memo, category: category || r.category || '기타', repeatDays: repeatDays.length ? sortDays(repeatDays) : (r.repeatDays || ALL_DAYS) })
       });
       if (response.ok) fetchBackendRoutines();
       else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);

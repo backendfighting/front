@@ -157,15 +157,30 @@ input, select, textarea {
 
 /* 📌 우선순위 뱃지 스타일 모음 */
 .priority-badge {
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 800;
-  padding: 3px 8px;
-  border-radius: 6px;
-  margin-left: 10px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  margin-left: 8px;
   display: inline-block;
   /* 제목이 길어도 '높 음' 처럼 두 줄로 쪼개지지 않게 */
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* 목록 항목: 시간·카테고리·중요도가 윗줄, 제목이 아랫줄 */
+.item-meta {
+  font-size: 10px;
+  font-weight: 700;
+  color: #b5b1bc;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.item-meta + .item-meta { margin-left: 8px; }
+.item-title {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 .badge-high { color: #ff4d4d; background: #fff5f5; }
 .badge-medium { color: #ffb700; background: #fffaf0; }
@@ -179,6 +194,33 @@ input, select, textarea {
   margin-top: 12px;
 }
 .calendar-day-header { font-size: 11px; font-weight: 600; color: #aaa; padding: 4px 0; text-align: center; }
+
+/* 달력 상단의 연도·월 바로가기 */
+.date-picker-btn {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.date-picker-btn:hover { background: #ece9ff; }
+.date-picker-pop {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  width: 240px;
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e9e7f3;
+  border-radius: 16px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+}
 .calendar-cell {
   height: 38px;
   display: flex;
@@ -232,7 +274,10 @@ input, select, textarea {
 .result-btn {
   flex: 1; padding: 14px; border-radius: 14px;
   border: 1px solid #f0eff2; background: #fbfbff;
-  font-weight: 600; cursor: pointer;
+  font-weight: 700; cursor: pointer;
+  /* 색을 지정하지 않으면 글자가 배경에 묻혀 안 보였음 */
+  color: #4e4b52;
+  font-size: 15px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
 }
 .result-btn.success.active { border-color: #6c63ff; color: #6c63ff; background: #f5f4ff; }
