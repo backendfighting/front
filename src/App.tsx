@@ -40,7 +40,6 @@ function LoginView({ setView }: { setView: SetView }) {
 
   const handleLogin = async () => {
     if (!email || !password) return alert('이메일과 비밀번호를 입력해주세요.');
-    if (email === 'example@email.com' && password === '12345678') { setView('main'); return; }
     try {
       const response = await fetch(`${BASE_URL}/api/users/login`, {
         method: 'POST',
@@ -169,7 +168,7 @@ function ErrorView({ setView }: { setView: SetView }) {
   );
 }
 
-function NotiView({ setView, notifications, setNotifications, notiFilter, setNotiFilter }: any) {
+function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead }: any) {
   const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
 
   useEffect(() => {
@@ -215,7 +214,7 @@ function NotiView({ setView, notifications, setNotifications, notiFilter, setNot
           </button>
         )}
 
-        <div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>오늘</div>
+        <div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>최근 알림</div>
         {filteredNoti.length === 0 && (
           <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>새 알림이 없습니다.</p>
         )}
@@ -234,7 +233,7 @@ function NotiView({ setView, notifications, setNotifications, notiFilter, setNot
                  cursor: 'pointer',
                  opacity: n.unread ? 1 : 0.6
                }}
-               onClick={() => setNotifications((prev: any) => prev.map((item: any) => item.id === n.id ? { ...item, unread: false } : item))}
+               onClick={() => onRead(n)}
           >
             <div style={{
               width: 44, height: 44,
@@ -256,6 +255,200 @@ function NotiView({ setView, notifications, setNotifications, notiFilter, setNot
   );
 }
 
+// ===== 공통: 서버 에러 메시지 꺼내기 =====
+const readError = async (res: Response) => {
+  try {
+    const d = await res.json();
+    return d?.message || `오류 코드 ${res.status}`;
+  } catch {
+    return `오류 코드 ${res.status}`;
+  }
+};
+const authHeaders = () => {
+  const token = localStorage.getItem('token');
+  return { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' };
+};
+
+// ===== 서버 알림 -> 화면용 형태 =====
+const formatNotiTime = (iso: string) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return d.toDateString() === new Date().toDateString() ? `오늘 ${hh}:${mm}` : `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
+};
+const toServerNoti = (n: any) => {
+  const isDeadline = n.type === 'DEADLINE';
+  return {
+    id: `server-${n.notificationId}`,
+    serverId: n.notificationId,
+    type: isDeadline ? 'deadline' : 'summary',
+    icon: isDeadline ? '⏰' : '📋',
+    title: isDeadline ? '마감 임박' : '오늘의 할 일',
+    desc: n.message,
+    time: formatNotiTime(n.createdAt),
+    unread: !n.read,
+  };
+};
+
+// ===== 프로필 수정 =====
+function ProfileView({ setView, userProfile, setUserProfile }: any) {
+  const [name, setName] = useState(userProfile?.name === '사용자' ? '' : userProfile?.name || '');
+  const [email, setEmail] = useState(userProfile?.email === '이메일 없음' ? '' : userProfile?.email || '');
+
+  const handleSave = async () => {
+    if (!name.trim() || !email.trim()) return alert('닉네임과 이메일을 모두 입력해주세요.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return alert('이메일 형식이 올바르지 않습니다.');
+    try {
+      const res = await fetch(`${BASE_URL}/api/users/me`, {
+        method: 'PATCH', headers: authHeaders(),
+        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+      });
+      if (!res.ok) return alert(`프로필 수정에 실패했습니다.\n${await readError(res)}`);
+      const data = await res.json().catch(() => ({}));
+      setUserProfile({ name: data?.name || name.trim(), email: data?.email || email.trim() });
+      alert('프로필이 수정되었습니다.');
+      setView('main');
+    } catch { alert('서버와 통신할 수 없습니다.'); }
+  };
+
+  return (
+    <div className="card">
+      <div className="header-row">
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <h3 className="header-title">프로필 수정</h3>
+        <span className="text-link" onClick={handleSave}>저장</span>
+      </div>
+      <div className="scroll-content">
+        <div className="input-group"><label>👤 닉네임</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임" /></div>
+        <div className="input-group"><label>✉️ 이메일</label>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" /></div>
+        <p style={{ fontSize: '12px', color: '#b5b1bc', marginTop: '8px' }}>이메일을 바꾸면 다음 로그인부터 새 이메일을 사용해요.</p>
+      </div>
+    </div>
+  );
+}
+
+// ===== 비밀번호 변경 =====
+function PasswordView({ setView }: any) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+
+  const handleSave = async () => {
+    if (!current || !next || !confirmPw) return alert('모든 칸을 입력해주세요.');
+    if (next !== confirmPw) return alert('새 비밀번호가 서로 일치하지 않습니다.');
+    if (next === current) return alert('현재 비밀번호와 다른 비밀번호를 입력해주세요.');
+    try {
+      const res = await fetch(`${BASE_URL}/api/users/password`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      if (!res.ok) return alert(`비밀번호 변경에 실패했습니다.\n${await readError(res)}`);
+      alert('비밀번호가 변경되었습니다.');
+      setView('main');
+    } catch { alert('서버와 통신할 수 없습니다.'); }
+  };
+
+  return (
+    <div className="card">
+      <div className="header-row">
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <h3 className="header-title">비밀번호 변경</h3>
+        <span className="text-link" onClick={handleSave}>저장</span>
+      </div>
+      <div className="scroll-content">
+        <div className="input-group"><label>🔒 현재 비밀번호</label>
+          <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="현재 비밀번호" /></div>
+        <div className="input-group"><label>🔑 새 비밀번호</label>
+          <input type="password" value={next} onChange={(e) => setNext(e.target.value)} placeholder="새 비밀번호" /></div>
+        <div className="input-group"><label>🔑 새 비밀번호 확인</label>
+          <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="새 비밀번호 다시 입력" /></div>
+      </div>
+    </div>
+  );
+}
+
+// ===== 루틴 관리 (일시중지 포함 전체 루틴) =====
+function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
+  const [routines, setRoutines] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/routines`, { headers: authHeaders() });
+      if (!res.ok) { setFailed(true); return; }
+      const data = await res.json();
+      setRoutines(Array.isArray(data) ? data : []);
+      setFailed(false);
+    } catch { setFailed(true); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const dayText = (days: string[]) => {
+    const d = sortDays(days || []);
+    if (d.length === 7) return '매일';
+    if (d.join() === ALL_DAYS.slice(0, 5).join()) return '평일';
+    if (d.join() === ALL_DAYS.slice(5).join()) return '주말';
+    return DAY_OPTIONS.filter(o => d.includes(o.v)).map(o => o.l).join(' · ');
+  };
+
+  const toggleActive = async (r: any) => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/routines/${r.routineId}/toggle`, { method: 'PATCH', headers: authHeaders() });
+      if (!res.ok) return alert(`상태 변경에 실패했습니다.\n${await readError(res)}`);
+      const updated = await res.json().catch(() => null);
+      setRoutines(prev => prev.map(x => x.routineId === r.routineId ? { ...x, active: updated ? updated.active : !x.active } : x));
+    } catch { alert('서버와 통신할 수 없습니다.'); }
+  };
+
+  return (
+    <div className="card">
+      <div className="header-row">
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <h3 className="header-title">루틴 관리</h3>
+        <div style={{ width: 24 }} />
+      </div>
+      <div className="scroll-content">
+        <p style={{ fontSize: '12px', color: '#b5b1bc', margin: '0 4px 16px' }}>일시중지한 루틴은 할 일 화면에 나타나지 않아요.</p>
+        {loading && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>불러오는 중...</p>}
+        {!loading && failed && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>루틴 목록을 불러오지 못했습니다.</p>}
+        {!loading && !failed && routines.length === 0 && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>등록된 루틴이 없습니다.</p>}
+        {!loading && !failed && routines.map((r: any) => (
+          <div key={r.routineId} style={{ background: '#fff', border: '1px solid #f1f0f5', borderRadius: '20px', padding: '18px 20px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px', opacity: r.active ? 1 : 0.55 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#1a191b', marginBottom: '6px' }}>{r.title}</div>
+              <div style={{ fontSize: '12px', color: '#7a7680' }}>🔁 {dayText(r.repeatDays)}{r.active ? '' : '  ·  일시중지됨'}</div>
+            </div>
+            <div role="switch" aria-checked={!!r.active} aria-label={`${r.title} ${r.active ? '일시중지' : '다시 시작'}`}
+                 onClick={() => toggleActive(r)} className="cursor-pointer"
+                 style={{ width: 44, height: 26, borderRadius: 13, background: r.active ? '#586589' : '#d9d7e0', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: r.active ? 21 : 3, transition: 'left 0.2s' }} />
+            </div>
+            <Pencil size={18} color="#b5b1bc" className="cursor-pointer" onClick={() => onEditRoutine(r)} />
+            <Trash2 size={18} color="#ff4d4d" className="cursor-pointer" onClick={async () => {
+              if (!confirm('이 루틴을 삭제하시겠습니까?')) return;
+              await onDeleteRoutine(r.routineId);
+              load();
+            }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const DAY_OPTIONS = [
+  { v: 'MONDAY', l: '월' }, { v: 'TUESDAY', l: '화' }, { v: 'WEDNESDAY', l: '수' },
+  { v: 'THURSDAY', l: '목' }, { v: 'FRIDAY', l: '금' }, { v: 'SATURDAY', l: '토' }, { v: 'SUNDAY', l: '일' },
+];
+const ALL_DAYS = DAY_OPTIONS.map(d => d.v);
+const sortDays = (days: string[]) => ALL_DAYS.filter(d => days.includes(d));
+
 function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editingItem, editingKind, globalDate }: any) {
   const isEdit = !!editingItem;
   const isRoutineEdit = isEdit && editingKind === 'routine';
@@ -268,12 +461,19 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
     editingItem?.priority === 'LOW' ? 'low' : editingItem?.priority === 'MEDIUM' ? 'normal' : 'high'
   );
   const [type, setType] = useState(isRoutineEdit ? 'routine' : 'todo');
+  const [repeatDays, setRepeatDays] = useState<string[]>(
+    Array.isArray(editingItem?.repeatDays) ? sortDays(editingItem.repeatDays) : []
+  );
+  const isRoutine = isRoutineEdit || (!isEdit && type === 'routine');
+  const toggleDay = (d: string) =>
+    setRepeatDays(prev => sortDays(prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]));
 
   const handleSave = () => {
     if (!title.trim()) return alert('제목을 입력하세요.');
-    if (isRoutineEdit) onUpdateRoutine(editingItem, title, memo);
+    if (isRoutine && repeatDays.length === 0) return alert('반복할 요일을 하나 이상 선택하세요.');
+    if (isRoutineEdit) onUpdateRoutine(editingItem, title, memo, repeatDays);
     else if (isEdit) onUpdateTodo(editingItem.todoId || editingItem.id, title, memo, date, time, priority);
-    else onAddTodo(title, memo, date, time, priority, type);
+    else onAddTodo(title, memo, date, time, priority, type, repeatDays);
     setView('main');
   };
 
@@ -298,7 +498,24 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
           <label>📝 메모</label>
           <input placeholder="메모 (선택)" value={memo} onChange={(e) => setMemo(e.target.value)} />
         </div>
-        {!isRoutineEdit && (
+        {isRoutine ? (
+          <div className="input-group">
+            <label>🔁 반복 요일</label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {DAY_OPTIONS.map(d => (
+                <button key={d.v} className={`chip ${repeatDays.includes(d.v) ? 'active' : ''}`} onClick={() => toggleDay(d.v)}
+                  style={{ flex: 1, minWidth: 0, padding: '8px 0', textAlign: 'center' }}>
+                  {d.l}
+                </button>
+              ))}
+            </div>
+            <div className="filter-tabs" style={{ marginTop: '8px' }}>
+              <button className="chip" onClick={() => setRepeatDays(ALL_DAYS)}>매일</button>
+              <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(0, 5))}>평일</button>
+              <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(5))}>주말</button>
+            </div>
+          </div>
+        ) : (
           <>
             <div className="input-group"><label>📅 날짜 지정</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
             <div className="input-group"><label>🕒 시간 지정</label><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
@@ -794,6 +1011,7 @@ function MainAppView({
 
             <button className="primary-button" style={{ marginTop: '20px' }} onClick={() => {
   if (!resultType) return alert('성공 또는 실패를 선택해주세요.');
+  if (resultType === 'fail' && failReasons.length === 0) return alert('실패 사유를 하나 이상 선택해주세요.');
   if (selectedGoalId === null || selectedGoalId === undefined) {
     alert('목표 번호를 찾지 못했습니다. 화면을 새로고침한 뒤 다시 시도해주세요.');
     return;
@@ -967,11 +1185,11 @@ function App() {
     }
   };
 
-  const handleAddTodo = async (title: string, memo: string, date: string, time: string, priority: string, type: string) => {
+  const handleAddTodo = async (title: string, memo: string, date: string, time: string, priority: string, type: string, repeatDays: string[] = []) => {
     const token = localStorage.getItem('token');
     try {
       if (type === 'routine') {
-        const payload = { title, description: memo, category: '기본', repeatDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] };
+        const payload = { title, description: memo, category: '기본', repeatDays: repeatDays.length ? sortDays(repeatDays) : ALL_DAYS };
         const response = await fetch(`${BASE_URL}/api/routines`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify(payload)
         });
@@ -994,16 +1212,16 @@ function App() {
     } catch { }
   };
 
-    const handleUpdateGoalStatus = async (id: number, status: string, progress: number, reason: string) => {
+    const handleUpdateGoalStatus = async (id: number, status: string, _progress: number, reason: string) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${BASE_URL}/api/goals/${id}/status`, {
+      const response = await fetch(`${BASE_URL}/api/goals/${id}/complete`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : ''
         },
-        body: JSON.stringify({ status, progress, reason })
+        body: JSON.stringify({ status, reason })
       });
 
       if (response.ok) {
@@ -1030,12 +1248,12 @@ function App() {
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${BASE_URL}/api/goals`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify({ title, category, desc, startDate, endDate, progress: 0, status: '진행중', reason: '' })
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify({ title, category, description: desc, startDate, endDate })
       });
       if (response.ok) fetchGoals();
-      else setGoals(prev => [...prev, { id: Date.now(), title, category, desc, startDate, endDate, progress: 0, status: '진행중', reason: '' }]);
+      else alert(`목표 추가에 실패했습니다. (오류 코드 ${response.status})`);
     } catch {
-      setGoals(prev => [...prev, { id: Date.now(), title, category, desc, startDate, endDate, progress: 0, status: '진행중', reason: '' }]);
+      alert('서버와 통신할 수 없습니다.');
     }
   };
 
@@ -1056,14 +1274,14 @@ function App() {
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
 
-  const handleUpdateRoutine = async (r: any, title: string, memo: string) => {
+  const handleUpdateRoutine = async (r: any, title: string, memo: string, repeatDays: string[] = []) => {
     const token = localStorage.getItem('token');
     const id = r.routineId || r.id;
     try {
       const response = await fetch(`${BASE_URL}/api/routines/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ title, description: memo, category: r.category || '기본', repeatDays: r.repeatDays || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] })
+        body: JSON.stringify({ title, description: memo, category: r.category || '기본', repeatDays: repeatDays.length ? sortDays(repeatDays) : (r.repeatDays || ALL_DAYS) })
       });
       if (response.ok) fetchBackendRoutines();
       else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
@@ -1072,27 +1290,16 @@ function App() {
 
   const handleUpdateGoal = async (g: any, title: string, category: string, desc: string, startDate: string, endDate: string) => {
     const token = localStorage.getItem('token');
-    const headers = { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' };
-    const oldId = g.id ?? g.goalId;
+    const id = g.id ?? g.goalId;
     try {
-      // 새 목표를 먼저 만들고, 성공하면 이전 목표를 지운다
-      const res = await fetch(`${BASE_URL}/api/goals`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ title, category, desc, description: desc, startDate, endDate, progress: 0, status: '진행중', reason: '' })
+      // 목표 자체를 수정 (번호 · 성공/실패 결과는 그대로 유지)
+      const res = await fetch(`${BASE_URL}/api/goals/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
+        body: JSON.stringify({ title, category, description: desc, startDate, endDate })
       });
-      if (!res.ok) { alert(`목표 수정에 실패했습니다. (오류 코드 ${res.status})`); return; }
-      const created: any = await res.json().catch(() => null);
-      const delRes = await fetch(`${BASE_URL}/api/goals/${oldId}`, { method: 'DELETE', headers });
-      if (!delRes.ok) alert(`수정은 되었지만 이전 목표를 지우지 못했습니다. (오류 코드 ${delRes.status})`);
-      // 성공/실패 기록이 있던 목표면 새 목표에도 같은 결과를 반영 (실패해도 무시)
-      const newId = created?.id ?? created?.goalId;
-      if (newId && g.status && g.status !== '진행중') {
-        await fetch(`${BASE_URL}/api/goals/${newId}/status`, {
-          method: 'PATCH', headers,
-          body: JSON.stringify({ status: g.status, progress: g.progress ?? 0, reason: g.reason || '' })
-        }).catch(() => {});
-      }
-      fetchGoals();
+      if (res.ok) fetchGoals();
+      else alert(`목표 수정에 실패했습니다. (오류 코드 ${res.status})`);
     } catch {
       alert('서버와 통신할 수 없습니다.');
     }
@@ -1109,7 +1316,7 @@ function App() {
     if (confirm('정말로 회원 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
       const token = localStorage.getItem('token');
       try {
-        const response = await fetch(`${BASE_URL}/api/users`, { 
+        const response = await fetch(`${BASE_URL}/api/users/me`, { 
           method: 'DELETE',
           headers: { 'Authorization': token ? `Bearer ${token}` : '' }
         });
@@ -1198,6 +1405,34 @@ function App() {
 };
 
 const isLoggedInView = view !== 'login' && view !== 'register' && view !== 'error';
+
+// 서버에서 만든 알림 (매일 아침 할 일 요약, 마감 1시간 전) 불러오기
+const fetchServerNotifications = async () => {
+  if (!localStorage.getItem('token')) return;
+  try {
+    const res = await fetch(`${BASE_URL}/api/notifications`, { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!Array.isArray(data)) return;
+    const server = data.map(toServerNoti);
+    setNotifications((prev: any[]) => [...prev.filter((n: any) => !n.serverId), ...server]);
+  } catch (e) { console.error('서버 알림 로딩 실패', e); }
+};
+
+const handleReadNotification = async (n: any) => {
+  setNotifications((prev: any[]) => prev.map((item: any) => item.id === n.id ? { ...item, unread: false } : item));
+  if (n.serverId && n.unread) {
+    try { await fetch(`${BASE_URL}/api/notifications/${n.serverId}/read`, { method: 'PATCH', headers: authHeaders() }); }
+    catch (e) { console.error('알림 읽음 처리 실패', e); }
+  }
+};
+
+useEffect(() => {
+  if (!isLoggedInView) return;
+  fetchServerNotifications();
+  const timer = setInterval(fetchServerNotifications, 60000);
+  return () => clearInterval(timer);
+}, [isLoggedInView, view]);
 useEffect(() => {
   if (!isLoggedInView) return;
   checkReminders();
@@ -1239,9 +1474,9 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
         <NotiView 
           setView={setView} 
           notifications={notifications} 
-          setNotifications={setNotifications} 
           notiFilter={notiFilter} 
           setNotiFilter={setNotiFilter} 
+          onRead={handleReadNotification}
         />
       )}
       
@@ -1289,10 +1524,18 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
                   </div>
                 </div>
 
-                <div className="cursor-pointer" 
-                     style={{ background: '#f5f4ff', color: '#6c63ff', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '14px', marginBottom: 'auto' }}
-                     onClick={() => alert(`[회원 세부 정보]\n- 이메일 주소: ${userProfile.email}\n- 가입 닉네임: ${userProfile.name}\n\n목표 및 반복 루틴 데이터 관리 시스템`)}>
-                  <User size={18} style={{ marginRight: '12px' }} /> 내 정보 보기
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: 'auto' }}>
+                  {[
+                    { key: 'profile', label: '프로필 수정', icon: <User size={18} style={{ marginRight: '12px' }} /> },
+                    { key: 'password', label: '비밀번호 변경', icon: <Lock size={18} style={{ marginRight: '12px' }} /> },
+                    { key: 'routines', label: '루틴 관리', icon: <RotateCcw size={18} style={{ marginRight: '12px' }} /> },
+                  ].map(m => (
+                    <div key={m.key} className="cursor-pointer"
+                         style={{ background: '#f5f4ff', color: '#6c63ff', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '14px' }}
+                         onClick={() => { setIsSidebarOpen(false); setView(m.key); }}>
+                      {m.icon} {m.label}
+                    </div>
+                  ))}
                 </div>
 
                 <div style={{ marginTop: 'auto' }}>
@@ -1309,6 +1552,9 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
         </>
       )}
             {view === 'todo-add' && <TodoAddView setView={setView} onAddTodo={handleAddTodo} onUpdateTodo={handleUpdateTodo} onUpdateRoutine={handleUpdateRoutine} editingItem={editingItem} editingKind={editingKind} globalDate={globalDate} />}
+      {view === 'profile' && <ProfileView setView={setView} userProfile={userProfile} setUserProfile={setUserProfile} />}
+      {view === 'password' && <PasswordView setView={setView} />}
+      {view === 'routines' && <RoutineManageView setView={setView} onEditRoutine={handleEditRoutine} onDeleteRoutine={handleDeleteRoutine} />}
       {view === 'goal-add' && <GoalAddView setView={setView} onAddGoal={handleAddGoal} onUpdateGoal={handleUpdateGoal} editingGoal={editingGoal} globalDate={globalDate} />}
     </div>
   );
