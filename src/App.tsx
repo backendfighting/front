@@ -427,7 +427,7 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
       const res = await fetch(`${BASE_URL}/api/routines/${r.routineId}/toggle`, { method: 'PATCH', headers: authHeaders() });
       if (!res.ok) return alert(`상태 변경에 실패했습니다.\n${await readError(res)}`);
       const updated = await res.json().catch(() => null);
-      setRoutines(prev => prev.map(x => x.routineId === r.routineId ? { ...x, active: updated ? updated.active : !x.active } : x));
+      setRoutines(prev => prev.map(x => x.routineId === r.routineId ? (updated ? { ...x, ...updated } : { ...x, active: !x.active }) : x));
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
 
@@ -439,7 +439,7 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
         <div style={{ width: 24 }} />
       </div>
       <div className="scroll-content">
-        <p style={{ fontSize: '12px', color: '#b5b1bc', margin: '0 4px 16px' }}>일시중지한 루틴은 할 일 화면에 나타나지 않아요.</p>
+        <p style={{ fontSize: '12px', color: '#b5b1bc', margin: '0 4px 16px' }}>일시중지한 동안은 할 일 화면에 나타나지 않고, 수행률 계산에서도 빠져요.<br />(오늘 이미 완료했다면 내일부터 쉬어요)</p>
         {loading && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>불러오는 중...</p>}
         {!loading && failed && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>루틴 목록을 불러오지 못했습니다.</p>}
         {!loading && !failed && visibleRoutines.length === 0 && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>등록된 루틴이 없습니다.</p>}
@@ -700,10 +700,19 @@ const statsRanges = (today: Date) => {
 
 type DayStat = { expected: number; done: number };
 
-// 그 날짜에 달력에 보이는 루틴인지 (켜져 있고, 요일이 맞고, 시작일~종료일 사이)
+// 그 날짜에 일시정지(쉬는 중)였는지. pausedFrom <= 날짜 < resumedOn (resumedOn이 없으면 아직 쉬는 중)
+// 서버가 일시정지 기록을 안 주면(예전 서버) 지금 꺼져 있는지로만 판단한다
+const isPausedOn = (r: any, k: string) => {
+  if (!Array.isArray(r.pauses)) return r.active === false;
+  return r.pauses.some((p: any) => p && p.pausedFrom
+    && String(p.pausedFrom).slice(0, 10) <= k
+    && (!p.resumedOn || k < String(p.resumedOn).slice(0, 10)));
+};
+
+// 그 날짜에 달력에 보이는 루틴인지 (쉬는 기간이 아니고, 요일이 맞고, 시작일~종료일 사이)
 // 종료일은 '이 날부터 안 보임'을 뜻한다
 const isScheduledOn = (r: any, k: string, dow: string) =>
-  r.active !== false &&
+  !isPausedOn(r, k) &&
   Array.isArray(r.repeatDays) && r.repeatDays.includes(dow) &&
   (!r.startDate || String(r.startDate).slice(0, 10) <= k) &&
   (!r.endDate || k < String(r.endDate).slice(0, 10));
