@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type React from 'react';
 import {
   Mail, Lock, Eye, ChevronLeft, Flag, Bell,
   CheckCircle2, Circle,
@@ -21,6 +22,34 @@ const getTodayStr = () => {
 
 const getNotified = (): string[] => {
   try { return JSON.parse(localStorage.getItem('notifiedIds') || '[]'); } catch { return []; }
+};
+
+// 목표·알림 설정 화면: 버튼·스위치·선택된 칩(--ctl)을 남색으로
+const NAVY_SCOPE = { '--ctl': 'var(--navy)', '--ctl-soft': 'var(--navy1)', '--ctl-line': 'var(--navy2)' } as React.CSSProperties;
+
+// ===== 앱 색 (App.css 맨 위의 색 변수와 같은 값) =====
+// 아이콘처럼 실제 색값이 필요한 곳에서만 쓴다. 나머지는 'var(--p5)' 같은 CSS 변수를 쓴다
+const C = {
+  p5: '#6a60de',
+  p4: '#8981e7',
+  p3: '#aaa4ef',
+  p2: '#f3f2fe',
+  p1: '#eae9fc',
+  navy: '#5b678c',
+  navy2: '#c5cbe0',
+  navy1: '#eef1f8',
+  red: '#e8787c',
+  red1: '#fdeeee',
+  orange: '#eba44c',
+  orange1: '#fdf3e6',
+  green: '#5aaf78',
+  g4: '#2e2c33',
+  g3: '#4e4b52',
+  g2: '#7a7680',
+  g1: '#b5b1bc',
+  bg: '#f7f6fb',
+  surface: '#f1f0f5',
+  line: '#ecebf1',
 };
 
 // 컴퓨터/폰 알림 띄우기. 누르면 open 에 적힌 화면(오늘의 미션 등)이 열린다
@@ -72,28 +101,28 @@ function LoginView({ setView }: { setView: SetView }) {
 
   return (
     <div className="card">
-      <div style={{ backgroundColor: '#e9e7ff', width: '52px', height: '52px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '48px auto 16px' }}>
-        <Flag size={24} color="#6c63ff" fill="#6c63ff" />
+      <div style={{ backgroundColor: 'var(--p1)', width: '52px', height: '52px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '48px auto 16px' }}>
+        <Flag size={24} color={C.p5} fill={C.p5} />
       </div>
-      <h2 style={{ fontSize: '26px', fontWeight: 800, marginBottom: '40px', color: '#1a191b' }}>Goal Tracker</h2>
+      <h2 style={{ fontSize: '26px', fontWeight: 800, marginBottom: '40px', color: 'var(--g4)' }}>Goal Tracker</h2>
       <div className="input-group">
         <label>이메일</label>
         <div style={{ position: 'relative' }}>
           <input type="email" placeholder="example@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Mail size={18} style={{ position: 'absolute', right: '14px', top: '20px', color: '#b5b1bc' }} />
+          <Mail size={18} style={{ position: 'absolute', right: '14px', top: '20px', color: 'var(--g1)' }} />
         </div>
       </div>
       <div className="input-group">
         <label>비밀번호</label>
         <div style={{ position: 'relative' }}>
           <input type={showPassword ? "text" : "password"} placeholder="비밀번호를 입력하세요" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <Lock size={18} style={{ position: 'absolute', right: '44px', top: '20px', color: '#b5b1bc' }} />
-          <Eye size={18} className="cursor-pointer" style={{ position: 'absolute', right: '14px', top: '20px', color: showPassword ? '#6c63ff' : '#b5b1bc' }} onClick={() => setShowPassword(!showPassword)} />
+          <Lock size={18} style={{ position: 'absolute', right: '44px', top: '20px', color: 'var(--g1)' }} />
+          <Eye size={18} className="cursor-pointer" style={{ position: 'absolute', right: '14px', top: '20px', color: showPassword ? 'var(--p5)' : 'var(--g1)' }} onClick={() => setShowPassword(!showPassword)} />
         </div>
       </div>
       <div style={{ height: '10px' }} />
       <button className="primary-button" onClick={handleLogin}>로그인</button>
-      <p style={{ marginTop: '24px', fontSize: '13px', color: '#7a7680' }}>
+      <p style={{ marginTop: '24px', fontSize: '13px', color: 'var(--g2)' }}>
         계정이 없으신가요? <span className="text-link" onClick={() => setView('register')}>회원가입</span>
       </p>
     </div>
@@ -153,14 +182,14 @@ function RegisterView({ setView }: any) {
   return (
     <div className="card">
       <div className="header-row">
-        <ChevronLeft onClick={() => setView('login')} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={() => setView('login')} className="cursor-pointer" color={C.g3} />
         <h3 className="header-title">회원가입</h3>
         <div style={{ width: 24 }} />
       </div>
       <div className="scroll-content" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 230px)', paddingBottom: '20px' }}>
         <div style={{ textAlign: 'left', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0', color: '#1a191b' }}>새로운 시작을 함께해요</h2>
-          <p style={{ fontSize: '13px', color: '#7a7680' }}>간단한 정보를 입력하고 서비스를 시작하세요.</p>
+          <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0', color: 'var(--g4)' }}>새로운 시작을 함께해요</h2>
+          <p style={{ fontSize: '13px', color: 'var(--g2)' }}>간단한 정보를 입력하고 서비스를 시작하세요.</p>
         </div>
         <div className="input-group"><label>이메일</label><input type="email" placeholder="example@email.com" value={email} onChange={(e)=>setEmail(e.target.value)} /></div>
         <div className="input-group"><label>비밀번호</label><input type="password" placeholder="비밀번호를 입력하세요" value={password} onChange={(e)=>setPassword(e.target.value)} /></div>
@@ -168,7 +197,7 @@ function RegisterView({ setView }: any) {
         <div className="input-group"><label>닉네임</label><input type="text" placeholder="닉네임을 입력하세요" value={nickname} onChange={(e)=>setNickname(e.target.value)} /></div>
         
         <div className="agreement-box">
-          <div className="agreement-item" style={{ borderBottom: '1px solid #f1f0f5', paddingBottom: '10px', marginBottom: '8px' }}>
+          <div className="agreement-item" style={{ borderBottom: '1px solid var(--surface)', paddingBottom: '10px', marginBottom: '8px' }}>
             <input type="checkbox" id="all-agree" checked={allChecked} onChange={(e) => setAgreements({ terms: e.target.checked, privacy: e.target.checked, marketing: e.target.checked })} />
             <label htmlFor="all-agree"><b>전체 동의</b></label>
           </div>
@@ -184,8 +213,8 @@ function RegisterView({ setView }: any) {
 function ErrorView({ setView }: { setView: SetView }) {
   return (
     <div className="card" style={{ justifyContent: 'center', paddingBottom: '30px' }}>
-      <div style={{ width: '84px', height: '84px', backgroundColor: '#f1f0f5', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 auto 24px' }}>
-        <AlertCircle size={42} color="#586589" />
+      <div style={{ width: '84px', height: '84px', backgroundColor: 'var(--surface)', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 auto 24px' }}>
+        <AlertCircle size={42} color={C.p5} />
       </div>
       <h2 style={{ fontSize: '20px', fontWeight: 700 }}>문제가 발생했습니다</h2>
       <button className="dark-button" onClick={() => setView('login')}><RotateCcw size={18} /> 다시 시도</button>
@@ -202,35 +231,35 @@ function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, o
   return (
     <div className="card">
       <div className="header-row">
-        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color={C.g3} />
         <h3 className="header-title">알림</h3>
-        <Settings size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenSettings} />
+        <Settings size={22} className="cursor-pointer" color={C.g3} onClick={onOpenSettings} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', marginBottom: '24px' }}>
         <div className="filter-tabs" style={{ padding: 0, marginBottom: 0, gap: '8px' }}>
-          <button className={`chip ${notiFilter === 'all' ? 'active' : ''}`} style={notiFilter !== 'all' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setNotiFilter('all')}>전체</button>
-          <button className={`chip ${notiFilter === 'unread' ? 'active' : ''}`} style={notiFilter !== 'unread' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setNotiFilter('unread')}>읽지 않음</button>
+          <button className={`chip ${notiFilter === 'all' ? 'active' : ''}`} style={notiFilter !== 'all' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--ctl)', color: 'white' }} onClick={() => setNotiFilter('all')}>전체</button>
+          <button className={`chip ${notiFilter === 'unread' ? 'active' : ''}`} style={notiFilter !== 'unread' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--ctl)', color: 'white' }} onClick={() => setNotiFilter('unread')}>읽지 않음</button>
         </div>
-        <span style={{ fontSize: '13px', color: '#b5b1bc', fontWeight: '500' }}>새 알림: {unreadCount}</span>
+        <span style={{ fontSize: '13px', color: 'var(--g1)', fontWeight: '500' }}>새 알림: {unreadCount}</span>
       </div>
 
       <div className="scroll-content">
         {/* 전시회 시연용: 오늘 남은 미션 개수 알림을 바로 보냄 (기기 알림 설정과 상관없이) */}
-        <button className="primary-button" style={{ marginBottom: '16px', background: '#6c63ff' }} onClick={onDemo}>
+        <button className="primary-button" style={{ marginBottom: '16px', background: 'var(--p5)' }} onClick={onDemo}>
           🔔 시연용 테스트 알림 보내기
         </button>
 
-        <div style={{ fontSize: '13px', fontWeight: '700', color: '#b5b1bc', marginBottom: '12px', marginLeft: '4px' }}>최근 알림</div>
+        <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--g1)', marginBottom: '12px', marginLeft: '4px' }}>최근 알림</div>
         {filteredNoti.length === 0 && (
-          <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>새 알림이 없습니다.</p>
+          <p style={{ color: 'var(--g1)', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>새 알림이 없습니다.</p>
         )}
 
         {filteredNoti.map((n: any) => (
           <div key={n.id}
                style={{
                  background: '#fff',
-                 border: '1px solid #f1f0f5',
+                 border: '1px solid var(--surface)',
                  borderRadius: '20px',
                  padding: '20px',
                  marginBottom: '16px',
@@ -244,16 +273,16 @@ function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, o
           >
             <div style={{
               width: 44, height: 44,
-              background: String(n.type).startsWith('goal') ? '#fff0f0' : '#eef2ff',
+              background: String(n.type).startsWith('goal') ? 'var(--red1)' : 'var(--p1)',
               borderRadius: 14, marginRight: 16, display: 'flex',
               justifyContent: 'center', alignItems: 'center', fontSize: '20px', flexShrink: 0
             }}>
               {n.icon}
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '15px', fontWeight: '700', color: '#1a191b', marginBottom: '6px' }}>{n.title}</div>
-              <div style={{ fontSize: '13px', color: '#7a7680', marginBottom: '12px', lineHeight: '1.4' }}>{n.desc}</div>
-              <div style={{ fontSize: '12px', color: '#b5b1bc', fontWeight: '500' }}>{n.time}</div>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--g4)', marginBottom: '6px' }}>{n.title}</div>
+              <div style={{ fontSize: '13px', color: 'var(--g2)', marginBottom: '12px', lineHeight: '1.4' }}>{n.desc}</div>
+              <div style={{ fontSize: '12px', color: 'var(--g1)', fontWeight: '500' }}>{n.time}</div>
             </div>
           </div>
         ))}
@@ -332,7 +361,7 @@ function ProfileView({ setView, userProfile, setUserProfile }: any) {
   return (
     <div className="card">
       <div className="header-row">
-        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color={C.g3} />
         <h3 className="header-title">프로필 수정</h3>
         <span className="text-link" onClick={handleSave}>저장</span>
       </div>
@@ -341,7 +370,7 @@ function ProfileView({ setView, userProfile, setUserProfile }: any) {
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임" /></div>
         <div className="input-group"><label>✉️ 이메일</label>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" /></div>
-        <p style={{ fontSize: '12px', color: '#b5b1bc', marginTop: '8px' }}>이메일을 바꾸면 다음 로그인부터 새 이메일을 사용해요.</p>
+        <p style={{ fontSize: '12px', color: 'var(--g1)', marginTop: '8px' }}>이메일을 바꾸면 다음 로그인부터 새 이메일을 사용해요.</p>
       </div>
     </div>
   );
@@ -371,7 +400,7 @@ function PasswordView({ setView }: any) {
   return (
     <div className="card">
       <div className="header-row">
-        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color={C.g3} />
         <h3 className="header-title">비밀번호 변경</h3>
         <span className="text-link" onClick={handleSave}>저장</span>
       </div>
@@ -431,36 +460,36 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
   return (
     <div className="card">
       <div className="header-row">
-        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color={C.g3} />
         <h3 className="header-title">루틴 관리</h3>
         <div style={{ width: 24 }} />
       </div>
       <div className="scroll-content">
-        <p style={{ fontSize: '12px', color: '#b5b1bc', margin: '0 4px 16px' }}>일시중지한 동안은 할 일 화면에 나타나지 않고, 수행률 계산에서도 빠져요.<br />(오늘 이미 완료했다면 내일부터 쉬어요)</p>
-        {loading && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>불러오는 중...</p>}
-        {!loading && failed && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>루틴 목록을 불러오지 못했습니다.</p>}
-        {!loading && !failed && visibleRoutines.length === 0 && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>등록된 루틴이 없습니다.</p>}
+        <p style={{ fontSize: '12px', color: 'var(--g1)', margin: '0 4px 16px' }}>일시중지한 동안은 할 일 화면에 나타나지 않고, 수행률 계산에서도 빠져요.<br />(오늘 이미 완료했다면 내일부터 쉬어요)</p>
+        {loading && <p style={{ color: 'var(--g1)', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>불러오는 중...</p>}
+        {!loading && failed && <p style={{ color: 'var(--g1)', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>루틴 목록을 불러오지 못했습니다.</p>}
+        {!loading && !failed && visibleRoutines.length === 0 && <p style={{ color: 'var(--g1)', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>등록된 루틴이 없습니다.</p>}
         {!loading && !failed && visibleRoutines.map((r: any) => (
-          <div key={r.routineId} style={{ background: '#fff', border: '1px solid #f1f0f5', borderRadius: '20px', padding: '18px 20px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px', opacity: r.active ? 1 : 0.55 }}>
+          <div key={r.routineId} style={{ background: '#fff', border: '1px solid var(--surface)', borderRadius: '20px', padding: '18px 20px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px', opacity: r.active ? 1 : 0.55 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '15px', fontWeight: '700', color: '#1a191b', marginBottom: '6px' }}>{r.title}</div>
-              <div style={{ fontSize: '12px', color: '#7a7680' }}>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--g4)', marginBottom: '6px' }}>{r.title}</div>
+              <div style={{ fontSize: '12px', color: 'var(--g2)' }}>
                 🔁 {dayText(r.repeatDays)}
                 {r.routineTime ? `  ·  🕒 ${String(r.routineTime).slice(0, 5)}` : ''}
                 {r.notifyBefore !== null && r.notifyBefore !== undefined ? '  ·  🔔' : ''}
                 {r.active ? '' : '  ·  일시중지됨'}
               </div>
               {r.startDate && String(r.startDate).slice(0, 10) > today && (
-                <div style={{ fontSize: '11px', color: '#a9a5b0', marginTop: '4px' }}>{String(r.startDate).slice(0, 10)}부터 시작</div>
+                <div style={{ fontSize: '11px', color: 'var(--g1)', marginTop: '4px' }}>{String(r.startDate).slice(0, 10)}부터 시작</div>
               )}
             </div>
             <div role="switch" aria-checked={!!r.active} aria-label={`${r.title} ${r.active ? '일시중지' : '다시 시작'}`}
                  onClick={() => toggleActive(r)} className="cursor-pointer"
-                 style={{ width: 44, height: 26, borderRadius: 13, background: r.active ? '#586589' : '#d9d7e0', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+                 style={{ width: 44, height: 26, borderRadius: 13, background: r.active ? 'var(--ctl)' : 'var(--g1)', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
               <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: r.active ? 21 : 3, transition: 'left 0.2s' }} />
             </div>
-            <Pencil size={18} color="#b5b1bc" className="cursor-pointer" onClick={() => onEditRoutine(r)} />
-            <Trash2 size={18} color="#ff4d4d" className="cursor-pointer" onClick={async () => {
+            <Pencil size={18} color={C.g1} className="cursor-pointer" onClick={() => onEditRoutine(r)} />
+            <Trash2 size={18} color={C.red} className="cursor-pointer" onClick={async () => {
               if (!confirm('이 루틴을 앞으로의 일정에서 영영 삭제할까요?\n지난 기록은 삭제되지 않습니다.\n\n잠시 루틴을 쉬어가고 싶다면, 일시중지 기능으로 원하는 기간 동안 루틴을 멈춰보세요.')) return;
               await onDeleteRoutine(r.routineId, today);
               load();
@@ -573,9 +602,9 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
     : '이 기기에서 알림 허용이 필요해요';
 
   return (
-    <div className="card">
+    <div className="card" style={NAVY_SCOPE}>
       <div className="header-row">
-        <ChevronLeft onClick={goBack} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={goBack} className="cursor-pointer" color={C.g3} />
         <h3 className="header-title">알림 설정</h3>
         <span className="text-link" onClick={save}>저장</span>
       </div>
@@ -674,7 +703,7 @@ const FAIL_REASON_MESSAGES: Record<string, string[]> = {
 const plainReason = (r: string) => r.replace(/^[^\s가-힣]+\s*/, '');
 
 // 가로 막대 색: 가장 높은 값(동점 포함)만 진한 색, 나머지는 다른 색
-const AMBER = '#f4b740';
+const AMBER = 'var(--orange)';
 const barColorsByRank = (rates: (number | null)[], top: string, rest: string) => {
   const max = Math.max(0, ...rates.map(r => r ?? 0));
   return rates.map(r => (max > 0 && r === max ? top : rest));
@@ -833,7 +862,7 @@ const compareRates = (daily: Record<string, DayStat>, curFrom: Date, curTo: Date
 };
 
 // 루틴 심볼: 굵기는 어디나 같게, 화살표 몸통이 정사각형에 가깝게 직접 그림
-const RoutineIcon = ({ size = 32, color = '#6c63ff', strokeWidth = 2.2 }: { size?: number; color?: string; strokeWidth?: number }) => (
+const RoutineIcon = ({ size = 32, color = C.p5, strokeWidth = 2.2 }: { size?: number; color?: string; strokeWidth?: number }) => (
   <svg className="routine-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
        strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="m16 1 4 4-4 4" />
@@ -940,7 +969,7 @@ function PickField({ value, options, format, onChange, min, max, ariaLabel, styl
               onClick={() => { clearTimeout(clickTimer.current); clickTimer.current = setTimeout(openList, 200); }}
               onDoubleClick={startEdit}>
         <span>{format(value)}</span>
-        <ChevronDown size={14} color="#8e8a96" />
+        <ChevronDown size={14} color={C.g2} />
       </button>
       {open && (
         <>
@@ -1012,7 +1041,7 @@ function Toggle({ on, onClick, label, small = false, xs = false, disabled = fals
   return (
     <div role="switch" aria-checked={on} aria-label={label} aria-disabled={disabled || undefined}
          onClick={disabled ? undefined : onClick} className={disabled ? undefined : 'cursor-pointer'}
-         style={{ width: w, height: h, borderRadius: h / 2, background: on ? '#586589' : '#d9d7e0', position: 'relative', flexShrink: 0, transition: 'background 0.2s', opacity: disabled ? 0.5 : 1 }}>
+         style={{ width: w, height: h, borderRadius: h / 2, background: on ? 'var(--ctl)' : 'var(--g1)', position: 'relative', flexShrink: 0, transition: 'background 0.2s', opacity: disabled ? 0.5 : 1 }}>
       <div style={{ width: k, height: k, borderRadius: '50%', background: '#fff', position: 'absolute', top: pad, left: on ? w - k - pad : pad, transition: 'left 0.2s' }} />
     </div>
   );
@@ -1116,7 +1145,7 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
   return (
     <div className="card">
       <div className="header-row">
-        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color={C.g3} />
         <h3 className="header-title">{isEdit ? (isRoutineEdit ? '루틴 수정' : '할 일 수정') : '할 일 / 루틴 추가'}</h3>
         <span className="text-link" onClick={handleSave}>저장</span>
       </div>
@@ -1219,14 +1248,14 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
   };
 
   return (
-    <div className="card">
+    <div className="card" style={NAVY_SCOPE}>
       <div className="header-row">
-        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color={C.g3} />
         <h3 className="header-title">{isEdit ? '목표 수정' : '목표 추가'}</h3>
         <span className="text-link" onClick={handleSave}>저장</span>
       </div>
       <div className="scroll-content">
-        <div style={{ background: '#f5f4ff', color: '#6c63ff', padding: '24px', borderRadius: '16px', textAlign: 'center', fontWeight: 'bold', marginBottom: '20px' }}>
+        <div style={{ background: 'var(--navy1)', color: 'var(--navy)', padding: '24px', borderRadius: '16px', textAlign: 'center', fontWeight: 'bold', marginBottom: '20px' }}>
           {isEdit ? '목표를 수정해보세요' : '새로운 도전을 시작해보세요'}
         </div>
 
@@ -1248,7 +1277,7 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
             placeholder="목표에 대한 상세한 내용을 적어주세요..."
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
-            style={{ width: '100%', padding: '12px', border: '1px solid #e5e4e7', borderRadius: '12px', minHeight: '80px', resize: 'none' }}
+            style={{ width: '100%', padding: '12px', border: '1px solid var(--line)', borderRadius: '12px', minHeight: '80px', resize: 'none' }}
           />
         </div>
 
@@ -1263,10 +1292,10 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '16px', border: '1px solid #f1f0f5', borderRadius: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '16px', border: '1px solid var(--surface)', borderRadius: '16px' }}>
           <div>
-            <div style={{ fontWeight: '600', fontSize: '14px', color: '#333' }}>⏰ 리마인더 알림</div>
-            <div style={{ fontSize: '11px', color: '#b5b1bc', marginTop: '3px' }}>마감일에 알림을 보내드려요</div>
+            <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--g4)' }}>⏰ 리마인더 알림</div>
+            <div style={{ fontSize: '11px', color: 'var(--g1)', marginTop: '3px' }}>마감일에 알림을 보내드려요</div>
           </div>
           <Toggle on={reminder} onClick={() => setReminder(!reminder)} label="리마인더 알림" />
         </div>
@@ -1373,8 +1402,8 @@ function MainAppView({
       <div key={`todo-${id}`} className="list-item">
         <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }} onClick={() => onToggleTodo(id)}>
           {isDone ?
-            <CheckCircle2 size={22} color="#6c63ff" style={{ marginRight: 12, flexShrink: 0 }} /> :
-            <Circle size={22} color="#e5e4e7" style={{ marginRight: 12, flexShrink: 0 }} />
+            <CheckCircle2 size={22} color={C.p3} style={{ marginRight: 12, flexShrink: 0 }} /> :
+            <Circle size={22} color={C.line} style={{ marginRight: 12, flexShrink: 0 }} />
           }
           {/* 시간·중요도는 제목 위에 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
@@ -1384,13 +1413,13 @@ function MainAppView({
               )}
               <span className={`priority-badge ${priorityClass}`} style={t.todoTime ? undefined : { marginLeft: 0 }}>{priorityText}</span>
             </div>
-            <span className="item-title" style={{ textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>
+            <span className="item-title" style={{ textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--g1)' : 'var(--g4)' }}>
               {t.title}
             </span>
           </div>
         </div>
-        <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditTodo(t); }} />
-        <Trash2 size={18} className="cursor-pointer" color="#b5b1bc" onClick={(e) => {
+        <Pencil size={18} className="cursor-pointer" color={C.g1} style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditTodo(t); }} />
+        <Trash2 size={18} className="cursor-pointer" color={C.g1} onClick={(e) => {
           e.stopPropagation();
           if (confirm('이 일정을 삭제하시겠습니까?')) onDeleteTodo(id);
         }} />
@@ -1439,20 +1468,20 @@ function MainAppView({
   const undoneMode = !ignoreFilter && todoFilter === 'undone';
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#4e4b52' }}>
-        <span style={{ color: '#ff4d4d', marginRight: '6px' }}>📌</span> 일반 할 일 ({todoList.length}개)
+      <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: 'var(--g3)' }}>
+        <span style={{ color: 'var(--red)', marginRight: '6px' }}>📌</span> 일반 할 일 ({todoList.length}개)
       </div>
       {todoList.length === 0 ? (
-        <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '20px 0' }}>
+        <p style={{ color: 'var(--g1)', textAlign: 'center', fontSize: '13px', padding: '20px 0' }}>
           {doneMode ? '완료된 할 일이 없습니다.' : undoneMode ? '남은 할 일이 없습니다.' : '할 일이 없습니다.'}
         </p>
       ) : todoList.map(renderItemRow)}
 
-      <div style={{ display: 'flex', alignItems: 'center', margin: '32px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#4e4b52' }}>
+      <div style={{ display: 'flex', alignItems: 'center', margin: '32px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: 'var(--g3)' }}>
         <span style={{ marginRight: '6px' }}>🔄</span> 반복 루틴 ({routineList.length}개)
       </div>
       {routineList.length === 0 ? (
-        <div style={{ fontSize: '13px', color: '#b5b1bc', textAlign: 'center', padding: '24px 0', borderRadius: '16px', border: '1px dashed #e0dcfc' }}>
+        <div style={{ fontSize: '13px', color: 'var(--g1)', textAlign: 'center', padding: '24px 0', borderRadius: '16px', border: '1px dashed var(--p1)' }}>
           {doneMode ? '완료된 루틴이 없습니다.' : undoneMode ? '남은 루틴이 없습니다.' : '루틴 기록이 비어있습니다.'}
         </div>
       ) : routineList.map((r: any) => {
@@ -1469,8 +1498,8 @@ function MainAppView({
           <div key={`routine-${id}`} className="list-item">
             <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }} onClick={() => onToggleBackendRoutine(id)}>
               {isDone ?
-                <CheckCircle2 size={22} color="#6c63ff" style={{ marginRight: 12, flexShrink: 0 }} /> :
-                <Circle size={22} color="#e5e4e7" style={{ marginRight: 12, flexShrink: 0 }} />
+                <CheckCircle2 size={22} color={C.p3} style={{ marginRight: 12, flexShrink: 0 }} /> :
+                <Circle size={22} color={C.line} style={{ marginRight: 12, flexShrink: 0 }} />
               }
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
                 {(r.routineTime || pText || r.category) && (
@@ -1480,11 +1509,11 @@ function MainAppView({
                     {pText && <span className={`priority-badge ${pClass}`}>{pText}</span>}
                   </div>
                 )}
-                <span className="item-title" style={{ textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>{title}</span>
+                <span className="item-title" style={{ textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--g1)' : 'var(--g4)' }}>{title}</span>
               </div>
             </div>
-            <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditRoutine(r); }} />
-            <Trash2 size={18} className="cursor-pointer" color="#b5b1bc" onClick={(e) => {
+            <Pencil size={18} className="cursor-pointer" color={C.g1} style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditRoutine(r); }} />
+            <Trash2 size={18} className="cursor-pointer" color={C.g1} onClick={(e) => {
               e.stopPropagation();
               if (confirm(`이 루틴을 삭제할까요?\n\n${calMonth}/${selectedCalendarDay}부터 달력에서 사라지고, 지난 기록은 통계에 남아요.\n(이 날 이미 완료했다면 다음 날부터 사라져요)`)) onDeleteRoutine(id);
             }} />
@@ -1528,10 +1557,10 @@ function MainAppView({
   const renderProgressCard = (label: string) => {
     const p = missionProgress();
     return (
-      <div className="dashboard-card" style={{ background: '#f5f4ff', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '32px' }}>
-        <span style={{ fontSize: '13px', fontWeight: '700', color: '#6c63ff' }}>{label}</span>
-        <h3 style={{ fontSize: '21px', fontWeight: '800', margin: '8px 0 6px 0', color: '#1a191b' }}>{p.rate}% 완료</h3>
-        <span style={{ fontSize: '10.5px', color: '#7a7680', fontWeight: '500' }}>남은 미션 : {p.remain}개</span>
+      <div className="dashboard-card" style={{ background: 'var(--p2)', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '32px' }}>
+        <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--p5)' }}>{label}</span>
+        <h3 style={{ fontSize: '21px', fontWeight: '800', margin: '8px 0 6px 0', color: 'var(--g4)' }}>{p.rate}% 완료</h3>
+        <span style={{ fontSize: '10.5px', color: 'var(--g2)', fontWeight: '500' }}>남은 미션 : {p.remain}개</span>
       </div>
     );
   };
@@ -1542,9 +1571,9 @@ function MainAppView({
         return (
           <>
             <div className="header-row">
-              <Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} />
-              <h3 className="header-title">오늘의 미션 <span style={{fontSize:'13px', color:'#6c63ff', marginLeft:'8px'}}>{calMonth}/{selectedCalendarDay} {WEEKDAY_KO[targetDateObj.getDay()]}</span></h3>
-              <Bell size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenNoti} />
+              <Menu size={22} className="cursor-pointer" color={C.g3} onClick={onOpenMenu} />
+              <h3 className="header-title">오늘의 미션 <span style={{fontSize:'13px', color:'var(--p5)', marginLeft:'8px'}}>{calMonth}/{selectedCalendarDay} {WEEKDAY_KO[targetDateObj.getDay()]}</span></h3>
+              <Bell size={22} className="cursor-pointer" color={C.g3} onClick={onOpenNoti} />
             </div>
             {renderFilterBar()}
             <div className="scroll-content">
@@ -1566,11 +1595,11 @@ function MainAppView({
           return (
             <>
               <div className="header-row">
-                <ChevronLeft size={22} className="cursor-pointer" color="#4e4b52" onClick={() => setDayPageOpen(false)} />
+                <ChevronLeft size={22} className="cursor-pointer" color={C.g3} onClick={() => setDayPageOpen(false)} />
                 <h3 className="header-title">
                   {calMonth}/{selectedCalendarDay} ({WEEKDAY_KO[targetDateObj.getDay()]}) 미션
                 </h3>
-                <Bell size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenNoti} />
+                <Bell size={22} className="cursor-pointer" color={C.g3} onClick={onOpenNoti} />
               </div>
               <div className="scroll-content">
                 {renderProgressCard('미션 종합 달성도')}
@@ -1593,13 +1622,13 @@ function MainAppView({
 
         return (
           <>
-            <div className="header-row"><Menu size={22} className="cursor-pointer" onClick={onOpenMenu} /><h3 className="header-title">달력</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
+            <div className="header-row"><Menu size={22} className="cursor-pointer" onClick={onOpenMenu} /><h3 className="header-title">달력</h3><Bell size={22} color={C.g3} onClick={onOpenNoti} /></div>
             <div className="scroll-content">
-              <div style={{ background: '#fbfbff', border: '1px solid #f1f0f5', borderRadius: '24px', padding: '16px', position: 'relative' }}>
+              <div style={{ background: '#ffffff', border: '1px solid var(--surface)', borderRadius: '24px', padding: '16px', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <button className="cal-nav-btn" aria-label="이전 달" onClick={() => { setPickerOpen(null); handlePrevMonth(); }}><ChevronLeft size={18} /></button>
                   {/* 연도와 월을 눌러 바로 이동 */}
-                  <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', display: 'flex', gap: '6px', color: '#586589' }}>
+                  <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', display: 'flex', gap: '6px', color: 'var(--ctl)' }}>
                     <span className="date-picker-btn" onClick={() => setPickerOpen(pickerOpen === 'year' ? null : 'year')}>{calYear}년</span>
                     <span className="date-picker-btn" onClick={() => setPickerOpen(pickerOpen === 'month' ? null : 'month')}>{calMonth}월</span>
                   </h4>
@@ -1634,7 +1663,7 @@ function MainAppView({
                       <div key={dayNum} className={`calendar-cell ${dayNum === selectedCalendarDay ? 'active' : ''}`}
                            title="더블클릭하면 이 날의 미션이 열려요"
                            style={isToday ? {
-                             border: '2px solid #6c63ff',
+                             border: '2px solid var(--p5)',
                              flexDirection: 'column',
                              gap: '3px',
                              lineHeight: 1,
@@ -1644,17 +1673,17 @@ function MainAppView({
                         {dayNum}
                         {/* 오늘 날짜 표시 */}
                         {isToday && (
-                          <span style={{ fontSize: '8px', fontWeight: '700', color: dayNum === selectedCalendarDay ? '#fff' : '#6c63ff' }}>오늘</span>
+                          <span style={{ fontSize: '8px', fontWeight: '700', color: dayNum === selectedCalendarDay ? '#fff' : 'var(--p5)' }}>오늘</span>
                         )}
                       </div>
                     );
                   })}
                 </div>
               </div>
-              <div style={{ marginTop: '20px', fontWeight: '700', fontSize: '15px', color: '#7a7680' }}>
+              <div style={{ marginTop: '20px', fontWeight: '700', fontSize: '15px', color: 'var(--g2)' }}>
                 {calMonth}월 {selectedCalendarDay}일 미션
               </div>
-              <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '500', color: '#6b6375' }}>
+              <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '500', color: 'var(--g3)' }}>
                 종합 미션 달성률 {missionProgress().rate}%
               </div>
               {/* 한 번 클릭: 그 날의 미션을 간략하게 보기만 (수정·완료는 더블클릭해서 여는 페이지에서) */}
@@ -1698,17 +1727,17 @@ function MainAppView({
 
         return (
           <>
-            <div className="header-row"><Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} /><h3 className="header-title">목표</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
+            <div className="header-row"><Menu size={22} className="cursor-pointer" color={C.g3} onClick={onOpenMenu} /><h3 className="header-title">목표</h3><Bell size={22} color={C.g3} onClick={onOpenNoti} /></div>
             
             <div className="filter-tabs" style={{ justifyContent: 'flex-start', gap: '8px', padding: '0 20px', marginBottom: '16px' }}>
-              <button className={`chip ${goalFilter === 'all' ? 'active' : ''}`} style={goalFilter !== 'all' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setGoalFilter('all')}>전체</button>
-              <button className={`chip ${goalFilter === 'active' ? 'active' : ''}`} style={goalFilter !== 'active' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setGoalFilter('active')}>진행중</button>
-              <button className={`chip ${goalFilter === 'success' ? 'active' : ''}`} style={goalFilter !== 'success' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setGoalFilter('success')}>성공</button>
-              <button className={`chip ${goalFilter === 'fail' ? 'active' : ''}`} style={goalFilter !== 'fail' ? { background: '#f1f0f5', color: '#7a7680' } : { background: '#5b678c', color: 'white' }} onClick={() => setGoalFilter('fail')}>실패</button>
+              <button className={`chip ${goalFilter === 'all' ? 'active' : ''}`} style={goalFilter !== 'all' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--navy)', color: 'white' }} onClick={() => setGoalFilter('all')}>전체</button>
+              <button className={`chip ${goalFilter === 'active' ? 'active' : ''}`} style={goalFilter !== 'active' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--navy)', color: 'white' }} onClick={() => setGoalFilter('active')}>진행중</button>
+              <button className={`chip ${goalFilter === 'success' ? 'active' : ''}`} style={goalFilter !== 'success' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--navy)', color: 'white' }} onClick={() => setGoalFilter('success')}>성공</button>
+              <button className={`chip ${goalFilter === 'fail' ? 'active' : ''}`} style={goalFilter !== 'fail' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--navy)', color: 'white' }} onClick={() => setGoalFilter('fail')}>실패</button>
             </div>
 
             <div className="scroll-content">
-              <div className="dashboard-card" style={{ background: '#5b678c', color: 'white', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '24px' }}>
+              <div className="dashboard-card" style={{ background: 'var(--navy)', color: 'white', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '24px' }}>
                 <span style={{ fontSize: '13px', fontWeight: '500', opacity: 0.9 }}>나의 목표 달성률</span>
                 <h2 style={{ fontSize: '32px', fontWeight: '800', margin: '8px 0 0 0', color: 'white' }}>{dynamicOverallProgress}%</h2>
               </div>
@@ -1724,7 +1753,7 @@ function MainAppView({
               )}
 
               {filteredGoals.length === 0 && (
-                <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '20px 0' }}>
+                <p style={{ color: 'var(--g1)', textAlign: 'center', fontSize: '13px', padding: '20px 0' }}>
                   {goalFilter === 'active' ? '진행중인 목표가 없어요.' : goalFilter === 'success' ? '올해 성공한 목표가 없어요.' : goalFilter === 'fail' ? '올해 실패한 목표가 없어요.' : '올해 목표가 없어요. 새 목표를 세워보세요!'}
                 </p>
               )}
@@ -1732,7 +1761,7 @@ function MainAppView({
               {filteredGoals.map((g:any) => {
                 const isSuccess = g.status === '성공';
                 const isFail = g.status === '실패';
-                const statusColor = isSuccess ? '#5aaf78' : isFail ? '#e3787d' : '#eba44c';
+                const statusColor = isSuccess ? 'var(--green)' : isFail ? 'var(--red)' : 'var(--orange)';
                 // 진행중 목표: 마감 7일 전부터 D-n, 마감이 지났으면 결과 기록 필요
                 const left = !isSuccess && !isFail && g.endDate ? daysUntil(g.endDate) : null;
                 const dBadge = left === null ? null
@@ -1741,7 +1770,7 @@ function MainAppView({
                   : null;
 
                 return (
-                  <div key={`goal-${g.id}`} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', padding: '20px', background: '#fff', borderRadius: '20px', marginBottom: '16px', border: '1px solid #f1f0f5', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }} 
+                  <div key={`goal-${g.id}`} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', padding: '20px', background: '#fff', borderRadius: '20px', marginBottom: '16px', border: '1px solid var(--surface)', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }} 
                        onClick={() => { 
                          setSelectedGoalId(g.id); 
                          setResultType(isSuccess ? 'success' : isFail ? 'fail' : null); 
@@ -1751,7 +1780,7 @@ function MainAppView({
                     
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: (g.description || g.desc) ? '6px' : '16px' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                        <span style={{ fontSize: '16px', fontWeight: '700', color: '#2e2c33' }}>{g.title}</span>
+                        <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--g4)' }}>{g.title}</span>
                         {dBadge}
                       </span>
                       <span style={{ color: statusColor, fontSize: '13px', fontWeight: '700', flexShrink: 0 }}>{g.status}</span>
@@ -1759,18 +1788,18 @@ function MainAppView({
 
                     {/* 목표 내용: 제목과 날짜의 중간 색 */}
                     {(g.description || g.desc) && (
-                      <div style={{ fontSize: '11px', color: '#68656c', lineHeight: 1.5, marginBottom: '14px', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--g3)', lineHeight: 1.5, marginBottom: '14px', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
                         {g.description || g.desc}
                       </div>
                     )}
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '9px', color: '#b5b1bc', fontWeight: '500' }}>
+                      <span style={{ fontSize: '9px', color: 'var(--g1)', fontWeight: '500' }}>
                         {g.startDate || '-'} ~ {g.endDate || '-'}
                       </span>
                       <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-  <Pencil size={18} color="#b5b1bc" onClick={(e) => { e.stopPropagation(); onEditGoal(g); }} />
-  <Trash2 size={18} color="#b5b1bc" className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if(confirm('삭제하시겠습니까?')) onDeleteGoal(g.id); }} />
+  <Pencil size={18} color={C.g1} onClick={(e) => { e.stopPropagation(); onEditGoal(g); }} />
+  <Trash2 size={18} color={C.g1} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if(confirm('삭제하시겠습니까?')) onDeleteGoal(g.id); }} />
 </div>
                     </div>
                   </div>
@@ -1809,13 +1838,13 @@ function MainAppView({
         let periodDesc = '';
 
         if (period === 'day') {
-          periodDesc = '이번 주 요일별 수행 통계를 보여드려요.';
+          periodDesc = '이번 주 요일별 수행 통계예요';
           for (let i = 0; i < 7; i++) {
             const d = addDays(weekStart, i);
             chartData.push({ label: WEEKDAY_KO[d.getDay()], rate: toDateStr(d) <= toDateStr(today) ? rangeRate(daily, d, d) : null });
           }
         } else if (period === 'week') {
-          periodDesc = '이번 달 주차별 수행 통계를 보여드려요.';
+          periodDesc = '이번 달 주차별 수행 통계예요';
           // 달력의 한 줄(일~토)이 한 주차
           const first = new Date(today.getFullYear(), today.getMonth(), 1);
           const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -1828,14 +1857,14 @@ function MainAppView({
             chartData.push({ label: `${w + 1}주차`, rate: toDateStr(from) <= toDateStr(today) ? rangeRate(daily, from, to < today ? to : today) : null });
           }
         } else if (period === 'month') {
-          periodDesc = isPast ? `${viewYear}년 월별 수행 통계를 보여드려요.` : '이번 년도 월별 수행 통계를 보여드려요.';
+          periodDesc = isPast ? `${viewYear}년 월별 수행 통계예요` : '이번 년도 월별 수행 통계예요';
           for (let m = 0; m < 12; m++) {
             const from = new Date(viewYear, m, 1);
             const to = new Date(viewYear, m + 1, 0);
             chartData.push({ label: `${m + 1}월`, rate: from <= today ? rangeRate(daily, from, to < today ? to : today) : null });
           }
         } else {
-          periodDesc = '연간 수행 통계를 보여드려요.\n그래프를 클릭하면 해당 연도의 기록을 볼 수 있어요.';
+          periodDesc = '연간 수행 통계예요\n그래프를 클릭하면 해당 연도의 기록을 볼 수 있어요';
           years.forEach(y => {
             const to = y === thisYear ? today : new Date(y, 11, 31);
             chartData.push({ label: `${y}년`, rate: rangeRate(daily, new Date(y, 0, 1), to), year: y } as any);
@@ -1892,30 +1921,31 @@ function MainAppView({
         const failMessage = causeMsgs.length ? causeMsgs[Math.floor(failMsgSeed * causeMsgs.length) % causeMsgs.length] : '';
 
         // 막대 색
-        const routineCatColors = barColorsByRank(routineCats.map(c => c.rate), '#ff8a8a', AMBER);
-        const goalCatColors = barColorsByRank(goalCats.map(c => c.rate), '#5b678c', '#c5cbe0');
-        const failColors = barColorsByRank(dynamicFailData.map(f => f.rate), '#ff8a8a', AMBER);
+        const routineCatColors = barColorsByRank(routineCats.map(c => c.rate), 'var(--red)', AMBER);
+        const goalCatColors = barColorsByRank(goalCats.map(c => c.rate), 'var(--navy)', 'var(--navy2)');
+        const failColors = barColorsByRank(dynamicFailData.map(f => f.rate), 'var(--red)', AMBER);
 
         // 저채도·중명도 보라 (요약에서 강조할 때)
-        const MUTED_PURPLE = '#7266a0';
+        const MUTED_PURPLE = 'var(--p5)';
 
-        const sectionTitle = (icon: any, text: string, sub: string, color: string) => (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 14px 2px' }}>
-            <div style={{ width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: '15px', fontWeight: '800', color: '#1a191b', lineHeight: 1.2 }}>{text}</div>
-              <div style={{ fontSize: '11px', fontWeight: '600', color: color }}>{sub}</div>
+        // 심볼은 둥근 사각형 안에. 오른쪽 두 줄(이름·연도)의 높이를 사각형 높이(32px)에 딱 맞춤
+        const sectionTitle = (icon: any, text: string, sub: string, color: string, boxBg: string) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', margin: '0 0 14px 2px' }}>
+            <div className="stats-icon-box" style={{ background: boxBg }}>{icon}</div>
+            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '32px' }}>
+              <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--g4)', lineHeight: '17px' }}>{text}</div>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: color, lineHeight: '13px' }}>{sub}</div>
             </div>
           </div>
         );
 
         const barRow = (name: string, rate: number | null, note: string, color: string) => (
           <div key={name} style={{ fontSize: '13px', marginBottom: '16px', textAlign: 'left' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontWeight: '600', color: '#4e4b52' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontWeight: '600', color: 'var(--g3)' }}>
               <span>{name}</span>
-              <span style={{ color: rate === null ? '#c9c5d0' : '#4e4b52' }}>
+              <span style={{ color: rate === null ? 'var(--g1)' : 'var(--g3)' }}>
                 {rate === null ? '기록 없음' : `${rate}%`}
-                <span style={{ fontSize: '11px', color: '#c9c5d0', marginLeft: '6px' }}>{note}</span>
+                <span style={{ fontSize: '11px', color: 'var(--g1)', marginLeft: '6px' }}>{note}</span>
               </span>
             </div>
             <div className="progress-bar"><div className="progress-fill" style={{ width: `${rate ?? 0}%`, background: color, borderRadius: '4px' }}></div></div>
@@ -1934,12 +1964,12 @@ function MainAppView({
             : <><b style={{ color: MUTED_PURPLE }}>{worstRoutineCats.map(c => c.name).join(', ')}</b> 카테고리의 수행률이 가장 낮았어요.</>,
           mom.kind === 'none' ? (isPast ? '전년도 기록이 없어 비교할 수 없어요.' : '지난 달 기록이 없어 비교할 수 없어요.')
             : mom.kind === 'same' ? (isPast ? '전년도와 수행률이 같아요.' : '지난 달과 수행률이 같아요.')
-            : <>{isPast ? '전년도' : '지난 달'} 대비 수행률은 <b style={{ color: mom.kind === 'up' ? '#3f9a5a' : '#d0605e' }}>{mom.pct}%p {mom.kind === 'up' ? '증가' : '감소'}</b>했어요.</>,
+            : <>{isPast ? '전년도' : '지난 달'} 대비 수행률은 <b style={{ color: mom.kind === 'up' ? 'var(--green)' : 'var(--red)' }}>{mom.pct}%p {mom.kind === 'up' ? '증가' : '감소'}</b>했어요.</>,
         ];
 
         return (
           <>
-            <div className="header-row"><Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} /><h3 className="header-title">통계</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
+            <div className="header-row"><Menu size={22} className="cursor-pointer" color={C.g3} onClick={onOpenMenu} /><h3 className="header-title">통계</h3><Bell size={22} color={C.g3} onClick={onOpenNoti} /></div>
             <div className="scroll-content">
               {isPast && (
                 <div className="past-year-bar">
@@ -1947,13 +1977,13 @@ function MainAppView({
                   <button onClick={() => setStatsYear(null)}>올해로 돌아가기</button>
                 </div>
               )}
-              <div style={{ fontSize: '12.5px', color: '#7a7680', lineHeight: 1.7, textAlign: 'left', marginBottom: '24px', fontWeight: '500' }}>
-                {isPast ? `${viewYear}년의 ` : '올해의 '}<b style={{ color: '#6c63ff' }}>루틴 수행률</b>과 <b style={{ color: '#5b678c' }}>목표 달성률</b>을 보여드려요.
+              <div style={{ fontSize: '12.5px', color: 'var(--g2)', lineHeight: 1.7, textAlign: 'left', marginBottom: '24px', fontWeight: '500' }}>
+                {isPast ? `${viewYear}년의 ` : '올해의 '}<b style={{ color: 'var(--p5)' }}>루틴 수행률</b>과 <b style={{ color: 'var(--navy)' }}>목표 달성률</b>을 보여드려요.
               </div>
 
               {/* ===================== 루틴 ===================== */}
-              <div style={{ background: '#fbfbff', border: '1px solid #efedfa', borderRadius: '20px', padding: '18px 16px', marginBottom: '28px' }}>
-                {sectionTitle(<RoutineIcon size={32} strokeWidth={2.2} color="#6c63ff" />, '루틴', `${viewYear}년`, '#6c63ff')}
+              <div style={{ background: '#ffffff', border: '1px solid var(--p1)', borderRadius: '20px', padding: '18px 16px', marginBottom: '28px' }}>
+                {sectionTitle(<RoutineIcon size={20} strokeWidth={2.4} color={C.p5} />, '루틴', `${viewYear}년`, 'var(--p5)', 'var(--p1)')}
 
                 <div className="stats-chart-title" style={{ marginLeft: '2px' }}>기간별 루틴 수행률</div>
                 <div className="filter-tabs" style={{ padding: 0, margin: '10px 0 6px', gap: '8px' }}>
@@ -1965,7 +1995,7 @@ function MainAppView({
                 {/* 그래프 제목의 0.7배, 얇게 */}
                 <div className="stats-chart-desc">{periodDesc}</div>
 
-                <div style={{ height: '170px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '20px 8px 10px', background: '#fff', border: '1px solid #f1f0f5', borderRadius: '16px', marginTop: '10px' }}>
+                <div style={{ height: '170px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '20px 8px 10px', background: '#fff', border: '1px solid var(--surface)', borderRadius: '16px', marginTop: '10px' }}>
                   {chartData.map((item, idx) => {
                     const isTop = item.rate !== null && item.rate === maxRateValue && maxRateValue > 0;
                     // 연간 그래프: 막대(연도)를 누르면 그 해 기록을 본다
@@ -1975,20 +2005,20 @@ function MainAppView({
                       <div key={idx} className={isYearBar ? 'year-bar' : undefined}
                            onClick={isYearBar ? () => selectYear(item.year as number) : undefined}
                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '6px', minWidth: 0 }}>
-                        <span style={{ fontSize: '8px', color: '#b5b1bc', fontWeight: '600', minHeight: '10px' }}>{item.rate === null ? '' : `${item.rate}%`}</span>
+                        <span style={{ fontSize: '8px', color: 'var(--g1)', fontWeight: '600', minHeight: '10px' }}>{item.rate === null ? '' : `${item.rate}%`}</span>
                         <div title={item.rate === null ? '기록 없음' : `${item.rate}%`}
-                             style={{ height: `${(item.rate ?? 0) * 1.0}px`, width: period === 'month' ? '12px' : '20px', background: isTop ? '#6c63ff' : '#e9e7ff', borderRadius: '5px', transition: '0.3s' }}></div>
-                        <span style={{ fontSize: '9px', color: isViewing ? '#6c63ff' : '#a9a5b0', fontWeight: isViewing ? '800' : '600', whiteSpace: 'nowrap' }}>{item.label}</span>
+                             style={{ height: `${(item.rate ?? 0) * 1.0}px`, width: period === 'month' ? '12px' : '20px', background: isTop ? 'var(--p4)' : 'var(--p1)', borderRadius: '5px', transition: '0.3s' }}></div>
+                        <span style={{ fontSize: '9px', color: isViewing ? 'var(--p5)' : 'var(--g1)', fontWeight: isViewing ? '800' : '600', whiteSpace: 'nowrap' }}>{item.label}</span>
                       </div>
                     );
                   })}
                 </div>
 
                 <div className="stats-chart-title" style={{ margin: '26px 0 0 2px' }}>카테고리별 루틴 수행률</div>
-                <div className="stats-chart-desc" style={{ margin: '6px 0 10px 2px' }}>{isPast ? `${viewYear}년의` : '올해의'} 전체 루틴 수행률을 확인해 보세요.</div>
-                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
+                <div className="stats-chart-desc" style={{ margin: '6px 0 10px 2px' }}>{isPast ? `${viewYear}년의` : '올해의'} 전체 루틴 수행률을 확인해 보세요</div>
+                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid var(--surface)' }}>
                   {routineCats.length === 0
-                    ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>아직 기록이 없어요.</div>
+                    ? <div style={{ fontSize: '13px', color: 'var(--g1)', paddingBottom: '16px' }}>아직 기록이 없어요.</div>
                     : routineCats.map((c, i) => barRow(c.name, c.rate, `${c.done}/${c.expected}`, routineCatColors[i]))}
                 </div>
 
@@ -2011,20 +2041,22 @@ function MainAppView({
               </div>
 
               {/* ===================== 목표 ===================== */}
-              <div style={{ background: '#fbfcff', border: '1px solid #e9edf6', borderRadius: '20px', padding: '18px 16px', marginBottom: '20px' }}>
-                {sectionTitle(<Flag size={32} strokeWidth={2.2} color="#5b678c" />, '목표', `${viewYear}년`, '#5b678c')}
+              <div style={{ background: '#ffffff', border: '1px solid var(--navy1)', borderRadius: '20px', padding: '18px 16px', marginBottom: '20px' }}>
+                {sectionTitle(<Flag size={19} strokeWidth={2.4} color={C.navy} />, '목표', `${viewYear}년`, 'var(--navy)', 'var(--navy1)')}
 
                 <div className="stats-chart-title" style={{ marginLeft: '2px' }}>카테고리별 목표 달성률</div>
-                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5', marginTop: '10px' }}>
+                <div className="stats-chart-desc" style={{ margin: '6px 0 10px 2px' }}>{isPast ? `${viewYear}년의` : '올해의'} 카테고리별 목표 달성 통계예요</div>
+                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid var(--surface)' }}>
                   {goalCats.length === 0
-                    ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>{isPast ? `${viewYear}년에` : '올해'} 등록한 목표가 없어요.</div>
+                    ? <div style={{ fontSize: '13px', color: 'var(--g1)', paddingBottom: '16px' }}>{isPast ? `${viewYear}년에` : '올해'} 등록한 목표가 없어요.</div>
                     : goalCats.map((c, i) => barRow(c.name, c.rate, c.done > 0 ? `성공 ${c.success}/완료 ${c.done}` : `진행중 ${c.total}`, goalCatColors[i]))}
                 </div>
 
-                <div className="stats-chart-title" style={{ margin: '26px 0 10px 2px' }}>실패 원인 분석</div>
-                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
+                <div className="stats-chart-title" style={{ margin: '26px 0 0 2px' }}>실패 원인 분석</div>
+                <div className="stats-chart-desc" style={{ margin: '6px 0 10px 2px' }}>{isPast ? `${viewYear}년에` : '올해'} 실패한 목표들의 원인 통계예요</div>
+                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid var(--surface)' }}>
                   {failedGoals.length === 0
-                    ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>{isPast ? `${viewYear}년에` : '올해'} 실패로 기록된 목표가 없어요.</div>
+                    ? <div style={{ fontSize: '13px', color: 'var(--g1)', paddingBottom: '16px' }}>{isPast ? `${viewYear}년에` : '올해'} 실패로 기록된 목표가 없어요.</div>
                     : dynamicFailData.map((f, i) => barRow(f.name, f.rate, '', failColors[i]))}
                 </div>
 
@@ -2040,11 +2072,11 @@ function MainAppView({
                 {isPast && (
                   <>
                     <div className="stats-chart-title" style={{ margin: '26px 0 10px 2px' }}>{viewYear}년 목표</div>
-                    <div style={{ background: '#fff', padding: '6px 16px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
+                    <div style={{ background: '#fff', padding: '6px 16px', borderRadius: '16px', border: '1px solid var(--surface)' }}>
                       {yearGoals.length === 0
-                        ? <div style={{ fontSize: '13px', color: '#b5b1bc', padding: '12px 0' }}>{viewYear}년에 등록한 목표가 없어요.</div>
+                        ? <div style={{ fontSize: '13px', color: 'var(--g1)', padding: '12px 0' }}>{viewYear}년에 등록한 목표가 없어요.</div>
                         : [...yearGoals].sort((a: any, b: any) => String(b.endDate || b.startDate || '').localeCompare(String(a.endDate || a.startDate || ''))).map((g: any) => {
-                          const c = g.status === '성공' ? '#5aaf78' : g.status === '실패' ? '#e3787d' : '#eba44c';
+                          const c = g.status === '성공' ? 'var(--green)' : g.status === '실패' ? 'var(--red)' : 'var(--orange)';
                           return (
                             <div key={`pg-${g.id}`} className="past-goal">
                               <div className="past-goal-top">
@@ -2072,7 +2104,7 @@ function MainAppView({
   return (
     <div className="card" style={{ paddingBottom: '80px' }}>
       {/* 탭마다 화면 구조가 달라서, key를 주어 탭이 바뀔 때 이전 탭의 요소가 남지 않도록 함 */}
-      <Fragment key={activeTab}>{renderTabContent()}</Fragment>
+      <div key={activeTab} style={{ display: 'contents', ...(activeTab === 'goal' ? NAVY_SCOPE : {}) }}>{renderTabContent()}</div>
 
       <div className="bottom-nav" style={{ justifyContent: 'space-around' }}>
         <div className={`nav-item ${activeTab === 'todo' ? 'active' : ''}`} onClick={() => goTab('todo')}><ClipboardList size={22} /><span>오늘의 미션</span></div>
@@ -2082,10 +2114,10 @@ function MainAppView({
       </div>
 
       {showGoalResult && (
-        <div className="bottom-sheet-overlay" onClick={() => setShowGoalResult(false)}>
+        <div className="bottom-sheet-overlay" style={NAVY_SCOPE} onClick={() => setShowGoalResult(false)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-handle"></div>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1a191b' }}>결과 상태 업데이트</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--g4)' }}>결과 상태 업데이트</h3>
             <div className="result-toggle-group">
               <button className={`result-btn success ${resultType === 'success' ? 'active' : ''}`} onClick={() => setResultType('success')}><Check size={16} /> 성공</button>
               <button className={`result-btn fail ${resultType === 'fail' ? 'active' : ''}`} onClick={() => setResultType('fail')}><X size={16} /> 실패</button>
@@ -2093,7 +2125,7 @@ function MainAppView({
 
             {resultType === 'fail' && (
               <div style={{ marginTop: '16px', textAlign: 'left' }}>
-                <label style={{ fontSize: '13px', fontWeight: '700', color: '#4e4b52', display: 'block', marginBottom: '8px' }}>실패 사유 다중 선택</label>
+                <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--g3)', display: 'block', marginBottom: '8px' }}>실패 사유 다중 선택</label>
                 <div className="filter-tabs" style={{ flexWrap: 'wrap', gap: '6px', padding: 0 }}>
                   {['⏱️ 시간 부족', '🎯 동기 부족', '🔋 체력 저하', '📅 계획 오류', '🌍 외부 요인'].map((reason) => (
                     <button 
@@ -2712,12 +2744,12 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
               }}>
                 
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '32px' }}>
-                  <div style={{ width: '48px', height: '48px', background: '#e9e7ff', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', marginRight: '16px' }}>
-                    <User size={24} color="#6c63ff" />
+                  <div style={{ width: '48px', height: '48px', background: 'var(--p2)', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', marginRight: '16px' }}>
+                    <User size={24} color={C.p5} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '16px', fontWeight: '700', color: '#1a191b' }}>{userProfile.name}</div>
-                    <div style={{ fontSize: '13px', color: '#b5b1bc' }}>{userProfile.email}</div>
+                    <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--g4)' }}>{userProfile.name}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--g1)' }}>{userProfile.email}</div>
                   </div>
                 </div>
 
@@ -2729,7 +2761,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
                     { key: 'noti-settings', label: '알림 설정', icon: <Bell size={18} style={{ marginRight: '12px' }} /> },
                   ].map(m => (
                     <div key={m.key} className="cursor-pointer"
-                         style={{ background: '#f5f4ff', color: '#6c63ff', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '14px' }}
+                         style={{ background: 'var(--p2)', color: 'var(--p5)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '14px' }}
                          onClick={() => { setIsSidebarOpen(false); setNotiSettingsBack('main'); setView(m.key); }}>
                       {m.icon} {m.label}
                     </div>
@@ -2737,10 +2769,10 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
                 </div>
 
                 <div style={{ marginTop: 'auto' }}>
-                  <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: '#1a191b' }} onClick={handleLogout}>
+                  <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: 'var(--g4)' }} onClick={handleLogout}>
                     <LogOut size={20} style={{ marginRight: '16px' }} /> 로그아웃
                   </div>
-                  <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: '#ff4d4d' }} onClick={handleDeleteAccount}>
+                  <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: 'var(--red)' }} onClick={handleDeleteAccount}>
                     <Trash2 size={20} style={{ marginRight: '16px' }} /> 회원 탈퇴
                   </div>
                 </div>
