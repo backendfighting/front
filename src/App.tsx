@@ -25,11 +25,15 @@ const getNotified = (): string[] => {
 
 // 컴퓨터/폰 알림 띄우기. 누르면 open 에 적힌 화면(오늘의 미션 등)이 열린다
 // (클릭 처리는 public/sw-notification.js 와 App 의 메시지 수신부에서 함)
-const DEVICE_NOTI_OFF_KEY = 'deviceNotiOff';
-const isDeviceNotiOff = () => { try { return localStorage.getItem(DEVICE_NOTI_OFF_KEY) === '1'; } catch { return false; } };
+// 기기 알림(팝업) 켜짐 여부는 이 기기에만 저장. 기본값은 꺼짐
+const DEVICE_NOTI_ON_KEY = 'deviceNotiOn';
+const isDeviceNotiOn = () => { try { return localStorage.getItem(DEVICE_NOTI_ON_KEY) === '1'; } catch { return false; } };
+const setDeviceNotiOn = (on: boolean) => {
+  try { if (on) localStorage.setItem(DEVICE_NOTI_ON_KEY, '1'); else localStorage.removeItem(DEVICE_NOTI_ON_KEY); } catch { /* 저장 불가 */ }
+};
 const showDeviceNotification = async (title: string, body: string, open: string = 'todo') => {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  if (isDeviceNotiOff()) return; // 알림 설정에서 기기 알림을 끈 경우
+  if (!isDeviceNotiOn()) return; // 알림 설정에서 기기 알림을 켜지 않은 경우
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) { await reg.showNotification(title, { body, icon: '/pwa-192x192.png', data: { open } }); return; }
@@ -308,6 +312,7 @@ const SERVER_NOTI_META: Record<string, { title: string; icon: string }> = {
   TODO: { title: '오늘의 할일', icon: '📌' },
   ROUTINE: { title: '매일 루틴', icon: '🔄' },
   MISSION: { title: '오늘의 미션', icon: '📋' },
+  GOAL: { title: '목표 리마인더', icon: '🚩' },
   DEADLINE: { title: '마감 임박', icon: '⏰' },
   DAILY_SUMMARY: { title: '오늘의 할 일', icon: '📋' },
 };
@@ -490,29 +495,42 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
 
 function NotiSettingsView({ setView, backTo = 'main' }: any) {
   const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
-  // '오늘의 미션' 알림 시간들
-  const [times, setTimes] = useState<string[]>([]);
+  // 기기 알림(팝업)은 이 기기에만 저장. 기본값 꺼짐
+  const [deviceOn, setDeviceOn] = useState<boolean>(perm === 'granted' && isDeviceNotiOn());
+  // 알림 종류별 설정 (서버에 저장). 기본값 모두 꺼짐
+  const [settings, setSettings] = useState<any>({
+    missionAlarmOn: false, missionAlarmTimes: ['08:00'],
+    todoAlarmOn: false, routineAlarmOn: false,
+    goalAlarmOn: false, goalAlarmTime: '09:00',
+  });
   const [loaded, setLoaded] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch(`${BASE_URL}/api/users/me`, { headers: authHeaders() });
         const d = res.ok ? await res.json() : null;
-        setTimes(Array.isArray(d?.missionAlarmTimes) ? d.missionAlarmTimes : ['08:00']);
-      } catch { setTimes(['08:00']); }
+        if (d) {
+          setSettings({
+            missionAlarmOn: !!d.missionAlarmOn,
+            missionAlarmTimes: Array.isArray(d.missionAlarmTimes) && d.missionAlarmTimes.length ? d.missionAlarmTimes : ['08:00'],
+            todoAlarmOn: !!d.todoAlarmOn,
+            routineAlarmOn: !!d.routineAlarmOn,
+            goalAlarmOn: !!d.goalAlarmOn,
+            goalAlarmTime: d.goalAlarmTime || '09:00',
+          });
+        }
+      } catch { /* 기본값으로 표시 */ }
       finally { setLoaded(true); }
     })();
   }, []);
 
-  // 브라우저 권한은 웹페이지가 직접 거둘 수 없어서, '끄기'는 이 기기에서 알림을 띄우지 않도록 기억해 둔다
-  const [deviceOn, setDeviceOn] = useState<boolean>(perm === 'granted' && !isDeviceNotiOff());
+  const change = (patch: any) => { setSettings((prev: any) => ({ ...prev, ...patch })); setDirty(true); };
+  const times: string[] = settings.missionAlarmTimes;
+
   const toggleDevice = async () => {
-    if (deviceOn) {
-      try { localStorage.setItem(DEVICE_NOTI_OFF_KEY, '1'); } catch { /* 저장 불가 */ }
-      setDeviceOn(false);
-      return;
-    }
+    if (deviceOn) { setDeviceNotiOn(false); setDeviceOn(false); return; }
     if (typeof Notification === 'undefined') return alert('이 브라우저는 알림을 지원하지 않아요.');
     if (Notification.permission === 'denied') {
       return alert('이 사이트의 알림이 브라우저에서 차단되어 있어요.\n\n주소창 왼쪽 아이콘 → 알림 → "허용"으로 바꾼 뒤 다시 켜주세요.');
@@ -522,69 +540,95 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
       setPerm(result);
       if (result !== 'granted') return;
     }
-    try { localStorage.removeItem(DEVICE_NOTI_OFF_KEY); } catch { /* 저장 불가 */ }
+    setDeviceNotiOn(true);
     setDeviceOn(true);
   };
 
   const addTime = () => {
     const next = ['21:00', '12:00', '18:00', '07:00', '09:00'].find(t => !times.includes(t)) || '09:00';
-    setTimes(prev => [...prev, next]);
+    change({ missionAlarmTimes: [...times, next] });
   };
 
   const save = async () => {
-    const cleaned = Array.from(new Set(times)).sort();
+    const body = { ...settings, missionAlarmTimes: Array.from(new Set(times)).sort() };
     try {
-      const res = await fetch(`${BASE_URL}/api/users/me/alarm-times`, {
-        method: 'PUT', headers: authHeaders(), body: JSON.stringify({ times: cleaned }),
+      const res = await fetch(`${BASE_URL}/api/users/me/alarm-settings`, {
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body),
       });
       if (!res.ok) return alert(`저장에 실패했습니다.\n${await readError(res)}`);
-      setTimes(cleaned);
+      setSettings(body);
+      setDirty(false);
       alert('알림 설정이 저장되었습니다.');
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
 
+  const goBack = () => {
+    if (dirty && !confirm('저장하지 않은 변경 사항이 있어요. 저장하지 않고 나갈까요?')) return;
+    setView(backTo);
+  };
+
+  const section = (title: string, desc: string, on: boolean, onToggle: () => void, label: string, body?: any) => (
+    <div className="noti-section">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+        <div>
+          <div className="noti-section-title">{title}</div>
+          <div className="noti-section-desc">{desc}</div>
+        </div>
+        <Toggle on={on} onClick={onToggle} label={label} />
+      </div>
+      {on && body}
+    </div>
+  );
+
   return (
     <div className="card">
       <div className="header-row">
-        <ChevronLeft onClick={() => setView(backTo)} className="cursor-pointer" color="#4e4b52" />
+        <ChevronLeft onClick={goBack} className="cursor-pointer" color="#4e4b52" />
         <h3 className="header-title">알림 설정</h3>
         <span className="text-link" onClick={save}>저장</span>
       </div>
       <div className="scroll-content">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '16px', border: '1px solid #f1f0f5', borderRadius: '16px', marginBottom: '16px' }}>
-          <div>
-            <div style={{ fontWeight: '700', fontSize: '14px', color: '#1a191b' }}>기기 알림</div>
-            <div style={{ fontSize: '12px', color: '#b5b1bc', marginTop: '4px' }}>
-              {deviceOn ? '켜져 있습니다' : perm === 'denied' ? '브라우저에서 차단됨' : '꺼져 있습니다'}
-            </div>
-          </div>
-          <Toggle on={deviceOn} onClick={toggleDevice} label="기기 알림" />
-        </div>
+        {section('기기 알림', deviceOn ? '이 기기에 알림 창을 띄워요' : perm === 'denied' ? '브라우저에서 차단됨' : '이 기기에 알림 창을 띄우지 않아요',
+          deviceOn, toggleDevice, '기기 알림')}
 
-        <div className="noti-section">
-          <div className="noti-section-title">오늘의 미션 알림</div>
-          <div className="noti-section-desc">오늘 해야 할 미션의 개수를 알려드려요</div>
+        {loaded && (
+          <>
+            {section('오늘의 미션 알림', '오늘 해야 할 미션의 개수를 알려드려요',
+              settings.missionAlarmOn, () => change({ missionAlarmOn: !settings.missionAlarmOn }), '오늘의 미션 알림',
+              <>
+                {times.map((t, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+                    <TimeSelect value={t} onChange={(v) => change({ missionAlarmTimes: times.map((x, j) => (j === i ? v : x)) })} />
+                    <button className="time-remove-btn" aria-label="이 시간 삭제" onClick={() => change({ missionAlarmTimes: times.filter((_, j) => j !== i) })}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+                {times.length === 0 && (
+                  <p className="field-hint" style={{ marginTop: '10px' }}>알림 시간을 추가해주세요.</p>
+                )}
+                <button className="add-time-btn" onClick={addTime}>
+                  <span className="add-time-icon"><Plus size={14} /></span>
+                  시간 추가
+                </button>
+              </>)}
 
-          {loaded && times.map((t, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-              <TimeSelect value={t} onChange={(v) => setTimes(prev => prev.map((x, j) => (j === i ? v : x)))} />
-              <button className="time-remove-btn" aria-label="이 시간 삭제" onClick={() => setTimes(prev => prev.filter((_, j) => j !== i))}>
-                <X size={16} />
-              </button>
-            </div>
-          ))}
-          {loaded && times.length === 0 && (
-            <p className="field-hint" style={{ marginTop: '10px' }}>알림 시간이 없으면 오늘의 미션 알림이 오지 않아요.</p>
-          )}
+            {section('할 일 알림', '알림을 설정한 할 일을 정한 시간에 알려드려요',
+              settings.todoAlarmOn, () => change({ todoAlarmOn: !settings.todoAlarmOn }), '할 일 알림')}
 
-          <button className="add-time-btn" onClick={addTime}>
-            <span className="add-time-icon"><Plus size={16} /></span>
-            시간 추가
-          </button>
-        </div>
+            {section('루틴 알림', '알림을 설정한 루틴을 정한 시간에 알려드려요',
+              settings.routineAlarmOn, () => change({ routineAlarmOn: !settings.routineAlarmOn }), '루틴 알림')}
+
+            {section('목표 리마인더 알림', '목표 마감일에 알림을 보내드려요',
+              settings.goalAlarmOn, () => change({ goalAlarmOn: !settings.goalAlarmOn }), '목표 리마인더 알림',
+              <div style={{ marginTop: '10px' }}>
+                <TimeSelect value={settings.goalAlarmTime} onChange={(v) => change({ goalAlarmTime: v })} />
+              </div>)}
+          </>
+        )}
 
         <p className="field-hint" style={{ margin: '14px 4px 0', lineHeight: 1.6 }}>
-          할 일·루틴 알림은 추가하거나 수정할 때 '알림 설정'에서 정할 수 있어요.<br />
+          할 일·루틴 알림 시점은 추가하거나 수정할 때 정할 수 있어요.<br />
           알림은 이 앱이 열려 있을 때 화면에 떠요.
         </p>
       </div>
@@ -600,6 +644,54 @@ const ALL_DAYS = DAY_OPTIONS.map(d => d.v);
 const sortDays = (days: string[]) => ALL_DAYS.filter(d => days.includes(d));
 
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
+
+// 목표 실패 원인별 문구 (원인마다 5개 중 하나를 보여줌)
+const FAIL_REASON_MESSAGES: Record<string, string[]> = {
+  '시간 부족': [
+    '시간이 부족했다면, 이제는 시간부터 확보해 봐요! 하루의 빈틈을 찾아보는 건 어떨까요? ⏰',
+    '하루가 24시간이라는 사실은 변하지 않지만, 시간을 사용하는 방법은 바꿀 수 있어요!',
+    '모든 일을 다 해내려고 하지 않아도 괜찮아요. 중요한 일부터 하나씩 처리해 봅시다.',
+    '시간이 없었던 걸까요, 아니면 시간이 새고 있었던 걸까요? 하루의 사용 내역을 점검해 봐요! 🔍',
+    '바쁜 하루 속에서도 나를 위한 시간은 필요해요. 하루 10분부터 루틴에 투자해 보는 건 어떨까요?',
+  ],
+  '동기 부족': [
+    '처음 시작했을 때의 마음을 떠올려 보세요! 그때의 열정을 다시 꺼내 볼 시간이에요. 🔥',
+    '의욕이 생길 때까지 기다리지 마세요. 작은 실천이 새로운 의욕을 만들어 줄지도 몰라요!',
+    '매일 같은 일상이 지루하게 느껴진다면, 루틴에 작은 변화를 줘보는 건 어떨까요? 🎨',
+    '때로는 목표를 향해 달리는 이유를 잊기도 하죠. 내가 이 목표를 세운 이유를 다시 생각해 봐요.',
+    '동기부여가 필요하신가요? 오늘은 스스로에게 작은 보상을 선물해 보는 건 어떨까요? 🎁',
+  ],
+  '체력 저하': [
+    '체력을 더 단련해야 해요! 가벼운 운동 루틴부터 추가해 볼까요? 💪',
+    '체력은 국력이라고 하죠? 일어나서 가벼운 체조라도 해봅시다! 🤸',
+    '몸이 지치면 마음도 지치기 마련이에요. 충분한 수면과 휴식으로 에너지를 충전해 봐요! 💤',
+    '건강한 몸이 꾸준한 실천의 바탕이에요. 식사와 수면부터 꼼꼼하게 챙겨보세요! 🥗',
+    '무리해서 달리기보다는 잠시 숨을 고르는 것도 중요해요. 건강한 컨디션으로 다시 시작해 봅시다!',
+  ],
+  '계획 오류': [
+    '계획이 너무 빡빡했던 건 아닐까요? 이번에는 조금 더 현실적인 목표를 세워봐요! 📝',
+    '처음부터 너무 높은 목표를 잡을 필요는 없어요. 작은 목표부터 차근차근 쌓아 올려 봅시다.',
+    '계획은 지키기 위해 세우는 것이지, 지키지 못해 자책하기 위해 세우는 게 아니에요. 필요하다면 과감하게 수정해 보세요!',
+    '목표까지 가는 길이 막혔다면 다른 길을 찾아보면 돼요! 새로운 전략을 세워볼까요? 🧭',
+    '실패도 계획을 개선할 수 있는 소중한 자료예요. 이번 경험을 바탕으로 더 똑똑하게 도전해 봅시다!',
+  ],
+  '외부 요인': [
+    '때로는 내 의지와 상관없이 일이 꼬이기도 하죠. 너무 자책하지 말아요. 다음 기회는 또 찾아올 거예요!',
+    '예상치 못한 일이 생겼다고 해서 지금까지의 노력이 사라지는 건 아니에요. 다시 이어가면 됩니다! 🌱',
+    '날씨도, 주변 환경도 내 마음대로 되지는 않죠. 주어진 상황에 맞춰 유연하게 대처해 봐요!',
+    '계획대로 흘러가지 않는 날도 있는 법이에요. 잠시 멈췄다고 해서 포기한 것은 아니니까요!',
+    '바람이 불면 방향을 바꾸면 되고, 비가 오면 잠시 우산을 쓰면 돼요. 어떤 상황에서도 다시 시작할 방법은 있어요! ☂️',
+  ],
+};
+// '⏱️ 시간 부족' -> '시간 부족'
+const plainReason = (r: string) => r.replace(/^[^\s가-힣]+\s*/, '');
+
+// 가로 막대 색: 가장 높은 값(동점 포함)만 진한 색, 나머지는 다른 색
+const AMBER = '#f4b740';
+const barColorsByRank = (rates: (number | null)[], top: string, rest: string) => {
+  const max = Math.max(0, ...rates.map(r => r ?? 0));
+  return rates.map(r => (max > 0 && r === max ? top : rest));
+};
 
 // ===== 통계 계산 =====
 const DOW_KEYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
@@ -786,7 +878,7 @@ function PickField({ value, options, format, onChange, min, max, ariaLabel, styl
 
   if (editing) {
     return (
-      <input className="pick-field pick-input" type="number" autoFocus value={draft} min={min} max={max}
+      <input className="pick-field pick-input" type="text" inputMode="numeric" autoFocus value={draft}
              aria-label={ariaLabel} style={style}
              onChange={(e) => setDraft(e.target.value)}
              onBlur={commit}
@@ -849,22 +941,31 @@ function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-// 알림: 몇 분 전 (0 = 시작 시간). 5분 단위로 2시간 전까지, 그 밖은 더블클릭해서 직접 입력
-const ALARM_MINUTES = Array.from({ length: 25 }, (_, i) => i * 5);
+// 알림: 몇 분 전 (0 = 시작 시간). 30분까지 5분, 1시간까지 10분, 3시간까지 30분 단위. 그 밖은 더블클릭해서 직접 입력
+const ALARM_MINUTES = [0, 5, 10, 15, 20, 25, 30, 40, 50, 60, 90, 120, 150, 180];
 const formatAlarm = (m: number, startLabel: string) => {
   if (m === 0) return startLabel;
   if (m >= 60 && m % 60 === 0) return `${m / 60}시간 전`;
   if (m > 60) return `${Math.floor(m / 60)}시간 ${m % 60}분 전`;
   return `${m}분 전`;
 };
+// 할 일·루틴·목표에서 알림을 켜면, 알림 설정의 해당 종류도 자동으로 켠다
+const ensureAlarmTypeOn = async (type: 'todo' | 'routine' | 'goal') => {
+  const key = type === 'todo' ? 'todoAlarmOn' : type === 'routine' ? 'routineAlarmOn' : 'goalAlarmOn';
+  try {
+    await fetch(`${BASE_URL}/api/users/me/alarm-settings`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ [key]: true }) });
+  } catch (e) { console.error('알림 설정 변경 실패', e); }
+};
+
 const toServerPriority = (p: string) => (p === 'normal' ? 'MEDIUM' : String(p || 'normal').toUpperCase());
 
 // 켜고 끄는 스위치
-function Toggle({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
+function Toggle({ on, onClick, label, small = false }: { on: boolean; onClick: () => void; label: string; small?: boolean }) {
+  const w = small ? 34 : 44, h = small ? 20 : 26, k = small ? 14 : 20, pad = 3;
   return (
     <div role="switch" aria-checked={on} aria-label={label} onClick={onClick} className="cursor-pointer"
-         style={{ width: 44, height: 26, borderRadius: 13, background: on ? '#586589' : '#d9d7e0', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
-      <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: on ? 21 : 3, transition: 'left 0.2s' }} />
+         style={{ width: w, height: h, borderRadius: h / 2, background: on ? '#586589' : '#d9d7e0', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+      <div style={{ width: k, height: k, borderRadius: '50%', background: '#fff', position: 'absolute', top: pad, left: on ? w - k - pad : pad, transition: 'left 0.2s' }} />
     </div>
   );
 }
@@ -937,9 +1038,7 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
   const alarmSection = (
     <div className="input-group">
       <label>🔔 알림 설정</label>
-      {!timeOn ? (
-        <p className="field-hint">시간을 정하면 알림을 받을 수 있어요.</p>
-      ) : (
+      {timeOn && (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
           <button className={`chip chip-sm ${!alarmOn ? 'active' : ''}`} onClick={() => setAlarmOn(false)}>알림 없음</button>
           <button className={`chip chip-sm ${alarmOn ? 'active' : ''}`} onClick={() => setAlarmOn(true)}>알림 시간 설정</button>
@@ -1001,15 +1100,15 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
               <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
                 {DAY_OPTIONS.map(d => (
                   <button key={d.v} className={`chip ${repeatDays.includes(d.v) ? 'active' : ''}`} onClick={() => toggleDay(d.v)}
-                    style={{ flex: 1, minWidth: 0, padding: '8px 0', textAlign: 'center' }}>
+                    style={{ flex: 1, minWidth: 0, padding: '6px 0', fontSize: '12px', textAlign: 'center' }}>
                     {d.l}
                   </button>
                 ))}
               </div>
               <div className="filter-tabs" style={{ marginTop: '8px' }}>
-                <button className="chip" onClick={() => setRepeatDays(ALL_DAYS)}>매일</button>
-                <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(0, 5))}>평일</button>
-                <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(5))}>주말</button>
+                <button className="chip chip-sm" onClick={() => setRepeatDays(ALL_DAYS)}>매일</button>
+                <button className="chip chip-sm" onClick={() => setRepeatDays(ALL_DAYS.slice(0, 5))}>평일</button>
+                <button className="chip chip-sm" onClick={() => setRepeatDays(ALL_DAYS.slice(5))}>주말</button>
               </div>
             </div>
 
@@ -1022,12 +1121,14 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
             <div className="input-group">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <label>🕒 시간 지정</label>
-                <Toggle on={useTime} onClick={() => setUseTime(v => !v)} label="루틴 시간 지정" />
+                <Toggle small on={useTime} onClick={() => setUseTime(v => !v)} label="루틴 시간 지정" />
               </div>
-              {useTime && <div style={{ marginTop: '10px' }}><TimeSelect value={time} onChange={setTime} /></div>}
+              {useTime
+                ? <div style={{ marginTop: '10px' }}><TimeSelect value={time} onChange={setTime} /></div>
+                : <p className="field-hint">시간을 정하면 알림을 받을 수 있어요.</p>}
             </div>
 
-            {alarmSection}
+            {useTime && alarmSection}
             {prioritySection}
           </>
         ) : (
@@ -1055,7 +1156,7 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
   const [desc, setDesc] = useState(editingGoal?.desc || editingGoal?.description || '');
   const [startDate, setStartDate] = useState(editingGoal?.startDate || globalDate);
   const [endDate, setEndDate] = useState(editingGoal?.endDate || globalDate);
-  const [reminder, setReminder] = useState(false);
+  const [reminder, setReminder] = useState<boolean>(!!editingGoal?.remindOn);
 
   const handleSave = async () => {
     if (!title.trim()) return alert('목표를 입력하세요.');
@@ -1064,8 +1165,8 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
     if (endDate < startDate) return alert('마감일은 시작일 이후여야 합니다.');
     // 저장에 실패하면 입력한 내용이 사라지지 않도록 화면을 그대로 둔다
     const ok = isEdit
-      ? await onUpdateGoal(editingGoal, title, category, desc, startDate, endDate)
-      : await onAddGoal(title, category, desc, startDate, endDate);
+      ? await onUpdateGoal(editingGoal, title, category, desc, startDate, endDate, reminder)
+      : await onAddGoal(title, category, desc, startDate, endDate, reminder);
     if (ok !== false) setView('main');
   };
 
@@ -1115,14 +1216,11 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '16px', border: '1px solid #f1f0f5', borderRadius: '16px' }}>
-          <span style={{ fontWeight: '600', fontSize: '14px', color: '#333' }}>⏰ 리마인더 알림 설정</span>
-          <div
-            className="cursor-pointer"
-            onClick={() => setReminder(!reminder)}
-            style={{ width: '44px', height: '24px', background: reminder ? '#6c63ff' : '#e5e4e7', borderRadius: '12px', position: 'relative', transition: '0.2s' }}
-          >
-            <div style={{ width: '20px', height: '20px', background: 'white', borderRadius: '50%', position: 'absolute', top: '2px', left: reminder ? '22px' : '2px', transition: '0.2s' }}></div>
+          <div>
+            <div style={{ fontWeight: '600', fontSize: '14px', color: '#333' }}>⏰ 리마인더 알림</div>
+            <div style={{ fontSize: '11px', color: '#b5b1bc', marginTop: '3px' }}>마감일에 알림을 보내드려요</div>
           </div>
+          <Toggle on={reminder} onClick={() => setReminder(!reminder)} label="리마인더 알림" />
         </div>
       </div>
     </div>
@@ -1143,6 +1241,8 @@ function MainAppView({
   
   const [failReasons, setFailReasons] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'time' | 'priority'>('time');
+  // 실패 원인 문구를 고를 때 쓰는 값 (통계를 볼 때마다 바뀌지 않게 한 번만 정함)
+  const [failMsgSeed] = useState(() => Math.random());
   // 달력에서 날짜를 더블클릭하면 열리는 '그 날짜의 미션' 페이지 (하단 탭은 달력 그대로)
   const [dayPageOpen, setDayPageOpen] = useState(false);
   // 달력 상단의 연도·월 선택 창
@@ -1200,8 +1300,6 @@ function MainAppView({
     (backendRoutines || []).filter((r: any) => (todoFilter === 'done' ? r.isCompleted === true : true))
   );
 
-  const getGoalProgress = (g: any) => g.status === '성공' ? 100 : g.status === '실패' ? 0 : (g.progress || 0);
-
   const dynamicOverallProgress = (goals || []).length > 0 ? Math.floor(((goals || []).filter((g: any) => g.status === '성공').length / (goals || []).length) * 100) : 0;
 
   const renderItemRow = (t: any) => {
@@ -1248,6 +1346,31 @@ function MainAppView({
     </div>
   );
 
+  // 달력에서 날짜를 한 번 눌렀을 때 보이는 간략한 목록 (보기 전용)
+  const renderCompactDayList = () => {
+    const todoList = sortItems(todos || []);
+    const routineList = sortItems(backendRoutines || []);
+    const row = (key: string, title: string, time: any, done: boolean) => (
+      <div key={key} className="mini-item">
+        <span className={`mini-dot ${done ? 'done' : ''}`}>{done && <Check size={9} strokeWidth={3} />}</span>
+        <span className={`mini-title ${done ? 'done' : ''}`}>{title}</span>
+        {time && <span className="mini-time">{String(time).slice(0, 5)}</span>}
+      </div>
+    );
+    return (
+      <div className="mini-list">
+        <div className="mini-head">📌 일반 할 일 {todoList.length}</div>
+        {todoList.length === 0
+          ? <div className="mini-empty">할 일이 없어요</div>
+          : todoList.map((t: any) => row(`t-${t.todoId || t.id}`, t.title, t.todoTime, isItemDone(t)))}
+        <div className="mini-head" style={{ marginTop: '14px' }}>🔄 반복 루틴 {routineList.length}</div>
+        {routineList.length === 0
+          ? <div className="mini-empty">루틴이 없어요</div>
+          : routineList.map((r: any) => row(`r-${r.routineId || r.id}`, r.title, r.routineTime, r.isCompleted === true))}
+      </div>
+    );
+  };
+
   // 할 일 탭과 달력 탭에서 똑같이 쓰는 미션 목록 (일반 할 일 + 반복 루틴)
   // 달력 탭에서는 전체/완료 필터와 상관없이 그 날의 미션을 전부 보여준다
   const renderMissionLists = (ignoreFilter = false) => {
@@ -1265,8 +1388,8 @@ function MainAppView({
         </p>
       ) : todoList.map(renderItemRow)}
 
-      <div style={{ display: 'flex', alignItems: 'center', margin: '32px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#6c63ff' }}>
-        <span style={{ color: '#6c63ff', marginRight: '6px' }}>🔄</span> 반복 루틴 ({routineList.length}개)
+      <div style={{ display: 'flex', alignItems: 'center', margin: '32px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#4e4b52' }}>
+        <span style={{ marginRight: '6px' }}>🔄</span> 반복 루틴 ({routineList.length}개)
       </div>
       {routineList.length === 0 ? (
         <div style={{ fontSize: '13px', color: '#b5b1bc', textAlign: 'center', padding: '24px 0', borderRadius: '16px', border: '1px dashed #e0dcfc' }}>
@@ -1415,7 +1538,7 @@ function MainAppView({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <button className="cal-nav-btn" aria-label="이전 달" onClick={() => { setPickerOpen(null); handlePrevMonth(); }}><ChevronLeft size={18} /></button>
                   {/* 연도와 월을 눌러 바로 이동 */}
-                  <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', display: 'flex', gap: '6px' }}>
+                  <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', display: 'flex', gap: '6px', color: '#586589' }}>
                     <span className="date-picker-btn" onClick={() => setPickerOpen(pickerOpen === 'year' ? null : 'year')}>{calYear}년</span>
                     <span className="date-picker-btn" onClick={() => setPickerOpen(pickerOpen === 'month' ? null : 'month')}>{calMonth}월</span>
                   </h4>
@@ -1448,7 +1571,7 @@ function MainAppView({
                     const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
                     return (
                       <div key={dayNum} className={`calendar-cell ${dayNum === selectedCalendarDay ? 'active' : ''}`}
-                           title="더블클릭하면 그 날짜의 미션이 열려요"
+                           title="더블클릭하면 이 날의 미션이 열려요"
                            style={isToday ? {
                              border: '2px solid #6c63ff',
                              flexDirection: 'column',
@@ -1473,8 +1596,8 @@ function MainAppView({
               <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '500', color: '#7a7680' }}>
                 종합 미션 달성률 {missionProgress().rate}%
               </div>
-              {/* 달력에서도 할 일 페이지처럼 바로 완료 처리 가능 */}
-              {renderMissionLists(true)}
+              {/* 한 번 클릭: 그 날의 미션을 간략하게 보기만 (수정·완료는 더블클릭해서 여는 페이지에서) */}
+              {renderCompactDayList()}
             </div>
           </>
         );
@@ -1518,14 +1641,21 @@ function MainAppView({
                          setShowGoalResult(true); 
                        }}>
                     
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: (g.description || g.desc) ? '6px' : '16px' }}>
                       <span style={{ fontSize: '16px', fontWeight: '700', color: '#1a191b' }}>{g.title}</span>
                       <span style={{ color: statusColor, fontSize: '13px', fontWeight: '700' }}>{g.status}</span>
                     </div>
 
+                    {/* 목표 내용: 제목과 날짜의 중간 색 */}
+                    {(g.description || g.desc) && (
+                      <div style={{ fontSize: '11px', color: '#68656c', lineHeight: 1.5, marginBottom: '14px', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+                        {g.description || g.desc}
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '12px', color: '#b5b1bc', fontWeight: '500' }}>
-                        {getGoalProgress(g)}% 달성 ({g.startDate || '2026-03-01'} ~ {g.endDate || '2026-03-31'})
+                      <span style={{ fontSize: '9px', color: '#b5b1bc', fontWeight: '500' }}>
+                        {g.startDate || '-'} ~ {g.endDate || '-'}
                       </span>
                       <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
   <Pencil size={18} color="#b5b1bc" onClick={(e) => { e.stopPropagation(); onEditGoal(g); }} />
@@ -1623,7 +1753,19 @@ function MainAppView({
         const dynamicFailData = Object.keys(counts).map(name => ({
           name,
           rate: failedGoals.length > 0 ? Math.round((counts[name] / failedGoals.length) * 100) : 0,
-        }));
+        })).sort((a, b) => b.rate - a.rate);
+
+        // 가장 많은 실패 원인 + 그 원인에 맞는 문구 (방문할 때마다 5개 중 하나)
+        const topFailRate = dynamicFailData.length ? dynamicFailData[0].rate : 0;
+        const topFailNames = topFailRate > 0 ? dynamicFailData.filter(f => f.rate === topFailRate).map(f => plainReason(f.name)) : [];
+        const pickedCause = topFailNames.length ? topFailNames[Math.floor(failMsgSeed * topFailNames.length)] : '';
+        const causeMsgs = FAIL_REASON_MESSAGES[pickedCause] || [];
+        const failMessage = causeMsgs.length ? causeMsgs[Math.floor(failMsgSeed * causeMsgs.length) % causeMsgs.length] : '';
+
+        // 막대 색
+        const routineCatColors = barColorsByRank(routineCats.map(c => c.rate), '#6c63ff', AMBER);
+        const goalCatColors = barColorsByRank(goalCats.map(c => c.rate), '#5b678c', '#c5cbe0');
+        const failColors = barColorsByRank(dynamicFailData.map(f => f.rate), '#ff8a8a', AMBER);
 
         // 저채도·중명도 보라 (요약에서 강조할 때)
         const MUTED_PURPLE = '#7266a0';
@@ -1705,7 +1847,7 @@ function MainAppView({
                 <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
                   {routineCats.length === 0
                     ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>아직 기록이 없어요.</div>
-                    : routineCats.map(c => barRow(c.name, c.rate, `${c.done}/${c.expected}`, '#6c63ff'))}
+                    : routineCats.map((c, i) => barRow(c.name, c.rate, `${c.done}/${c.expected}`, routineCatColors[i]))}
                 </div>
 
                 {/* 요약 레포트 (최근 3개월) */}
@@ -1734,15 +1876,23 @@ function MainAppView({
                 <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5', marginTop: '10px' }}>
                   {goalCats.length === 0
                     ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>올해 등록한 목표가 없어요.</div>
-                    : goalCats.map(c => barRow(c.name, c.rate, c.done > 0 ? `성공 ${c.success}/완료 ${c.done}` : `진행중 ${c.total}`, '#5b678c'))}
+                    : goalCats.map((c, i) => barRow(c.name, c.rate, c.done > 0 ? `성공 ${c.success}/완료 ${c.done}` : `진행중 ${c.total}`, goalCatColors[i]))}
                 </div>
 
                 <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', margin: '26px 0 10px 2px' }}>실패 원인 분석</div>
                 <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
                   {failedGoals.length === 0
                     ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>올해 실패로 기록된 목표가 없어요.</div>
-                    : dynamicFailData.map(f => barRow(f.name, f.rate, '', '#ff8a8a'))}
+                    : dynamicFailData.map((f, i) => barRow(f.name, f.rate, '', failColors[i]))}
                 </div>
+
+                {/* 실패 원인 레포트 (목표 색에 맞춘 남색 계열). 실패 기록이 없으면 표시하지 않음 */}
+                {topFailNames.length > 0 && (
+                  <div className="goal-summary">
+                    <div className="goal-summary-head">트래커님의 목표 실패 원인은 {topFailNames.join(', ')}!</div>
+                    <div className="goal-summary-body">{failMessage}</div>
+                  </div>
+                )}
               </div>
 
               <div style={{ height: '40px' }} />
@@ -2008,7 +2158,7 @@ function App() {
           notifyBefore: extra.notifyBefore ?? null,
         };
         const response = await fetch(`${BASE_URL}/api/routines`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
-        if (response.ok) fetchBackendRoutines();
+        if (response.ok) { fetchBackendRoutines(); if (payload.notifyBefore !== null) ensureAlarmTypeOn('routine'); }
         else alert(`루틴 추가에 실패했습니다.\n\n${await readError(response)}`);
       } else {
         const todoPayload = {
@@ -2017,7 +2167,7 @@ function App() {
           notifyBefore: extra.notifyBefore ?? null,
         };
         const response = await fetch(`${BASE_URL}/api/todos`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(todoPayload) });
-        if (response.ok) fetchTodos();
+        if (response.ok) { fetchTodos(); if (todoPayload.notifyBefore !== null) ensureAlarmTypeOn('todo'); }
         else alert(`할 일 추가에 실패했습니다.\n\n${await readError(response)}`);
       }
     } catch (error) { console.error(error); alert('서버와 통신할 수 없습니다.'); }
@@ -2063,14 +2213,14 @@ function App() {
     } catch { setGoals(prev => prev.filter(g => g.id !== id)); }
   };
 
-  const handleAddGoal = async (title: string, category: string, desc: string, startDate: string, endDate: string) => {
+  const handleAddGoal = async (title: string, category: string, desc: string, startDate: string, endDate: string, remindOn: boolean = false) => {
     const token = localStorage.getItem('token');
     try {
-      const payload = { title, category, description: desc, startDate, endDate };
+      const payload = { title, category, description: desc, startDate, endDate, remindOn };
       const response = await fetch(`${BASE_URL}/api/goals`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify(payload)
       });
-      if (response.ok) { fetchGoals(); return true; }
+      if (response.ok) { fetchGoals(); if (remindOn) ensureAlarmTypeOn('goal'); return true; }
       // 서버가 알려준 실제 원인을 그대로 보여준다
       const msg = await readError(response);
       console.error('목표 추가 실패', response.status, msg, payload);
@@ -2098,7 +2248,7 @@ function App() {
           notifyBefore: extra.notifyBefore ?? null,
         })
       });
-      if (response.ok) fetchTodos();
+      if (response.ok) { fetchTodos(); if (extra.notifyBefore !== null && extra.notifyBefore !== undefined) ensureAlarmTypeOn('todo'); }
       else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
@@ -2119,12 +2269,12 @@ function App() {
           notifyBefore: 'notifyBefore' in extra ? extra.notifyBefore : (r.notifyBefore ?? null),
         })
       });
-      if (response.ok) fetchBackendRoutines();
+      if (response.ok) { fetchBackendRoutines(); if (extra.notifyBefore !== null && extra.notifyBefore !== undefined) ensureAlarmTypeOn('routine'); }
       else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
 
-  const handleUpdateGoal = async (g: any, title: string, category: string, desc: string, startDate: string, endDate: string) => {
+  const handleUpdateGoal = async (g: any, title: string, category: string, desc: string, startDate: string, endDate: string, remindOn: boolean = false) => {
     const token = localStorage.getItem('token');
     const id = g.id ?? g.goalId;
     try {
@@ -2132,9 +2282,9 @@ function App() {
       const res = await fetch(`${BASE_URL}/api/goals/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ title, category, description: desc, startDate, endDate })
+        body: JSON.stringify({ title, category, description: desc, startDate, endDate, remindOn })
       });
-      if (res.ok) { fetchGoals(); return true; }
+      if (res.ok) { fetchGoals(); if (remindOn) ensureAlarmTypeOn('goal'); return true; }
       const msg = await readError(res);
       console.error('목표 수정 실패', res.status, msg);
       alert(`목표 수정에 실패했습니다.\n\n${msg}`);
@@ -2180,51 +2330,7 @@ function App() {
     }
   };
 
-  const checkReminders = async () => {
-  const token = localStorage.getItem('token');
-  const headers = { 'Authorization': token ? `Bearer ${token}` : '' };
-  const today = getTodayStr();
-  const now = new Date();
-  const timeLabel = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-  const items: any[] = [];
-
-  try {
-    // 할 일·루틴 알림은 알림을 켠 것만 서버에서 보내므로 여기서는 목표만 확인한다
-    // 목표: 오늘이 마감일이거나 마감일이 지난 진행중 목표
-    const goalRes = await fetch(`${BASE_URL}/api/goals`, { headers });
-    if (goalRes.ok) {
-      const data = await goalRes.json();
-      if (Array.isArray(data)) {
-        data.forEach((g: any) => {
-          if (g.status !== '진행중' || !g.endDate) return;
-          if (g.endDate === today) {
-            items.push({ id: `goal-today-${g.id}-${today}`, type: 'goal', icon: '🎯', unread: true, time: timeLabel,
-              title: '목표 마감일이에요', desc: `"${g.title}" 목표의 마감일이 오늘입니다` });
-          } else if (g.endDate < today) {
-            items.push({ id: `goal-over-${g.id}`, type: 'goal', icon: '🚩', unread: true, time: timeLabel,
-              title: '목표 결과를 기록해주세요', desc: `"${g.title}" 목표의 마감일이 지났습니다` });
-          }
-        });
-      }
-    }
-  } catch (e) { console.error('알림 확인 실패', e); }
-
-  if (items.length === 0) return;
-
-  // 알림 화면 목록에 추가 (이미 있는 건 제외 → 읽음 상태 유지)
-  setNotifications((prev: any[]) => {
-    const ids = new Set(prev.map((n: any) => n.id));
-    const add = items.filter(i => !ids.has(i.id));
-    return add.length ? [...add, ...prev] : prev;
-  });
-
-  // 컴퓨터 알림 팝업 (한 번 보낸 건 다시 안 보냄)
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    const notified = getNotified();
-    items.filter(i => !notified.includes(i.id)).forEach(i => showDeviceNotification(i.title, i.desc, 'goal'));
-    localStorage.setItem('notifiedIds', JSON.stringify([...new Set([...notified, ...items.map(i => i.id)])].slice(-100)));
-  }
-};
+  // 목표·할 일 알림은 알림 설정에 따라 서버가 만들어서 보낸다 (fetchServerNotifications 참고)
 
 const isLoggedInView = view !== 'login' && view !== 'register' && view !== 'error';
 
@@ -2277,7 +2383,7 @@ const fetchServerNotifications = async () => {
     fresh.forEach((n: any) => seen.add(n.id));
     const notified = getNotified();
     const toShow = fresh.filter((n: any) => !notified.includes(n.id));
-    toShow.forEach((n: any) => showDeviceNotification(n.title, n.desc, 'todo'));
+    toShow.forEach((n: any) => showDeviceNotification(n.title, n.desc, n.type === 'goal' ? 'goal' : 'todo'));
     if (toShow.length) {
       localStorage.setItem('notifiedIds', JSON.stringify([...new Set([...notified, ...toShow.map((n: any) => n.id)])].slice(-100)));
     }
@@ -2323,18 +2429,6 @@ useEffect(() => {
   const timer = setInterval(fetchServerNotifications, 30000);
   return () => clearInterval(timer);
 }, [isLoggedInView, view]);
-useEffect(() => {
-  if (!isLoggedInView) return;
-  checkReminders();
-  const timer = setInterval(checkReminders, 30000);
-  return () => clearInterval(timer);
-}, [isLoggedInView]);
-
-// 할 일/목표가 바뀌거나 화면을 이동할 때 바로 확인
-useEffect(() => {
-  if (!isLoggedInView) return;
-  checkReminders();
-}, [todos, goals, view]);
 
   useEffect(() => {
     if (view === 'main') {

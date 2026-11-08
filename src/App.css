@@ -471,3 +471,37 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
   color: #5b5566;
   margin-bottom: 8px;
 }
+
+/* 달력: 날짜를 한 번 눌렀을 때 보이는 간략한 목록 */
+.mini-list {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #f1f0f5;
+  border-radius: 14px;
+  text-align: left;
+}
+.mini-head { font-size: 11px; font-weight: 700; color: #7a7680; margin-bottom: 6px; }
+.mini-empty { font-size: 11px; color: #c9c5d0; padding: 2px 0 2px 2px; }
+.mini-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.mini-dot {
+  width: 13px; height: 13px; flex-shrink: 0;
+  border-radius: 50%; border: 1.5px solid #dcdae3;
+  display: flex; align-items: center; justify-content: center;
+  box-sizing: border-box; color: #fff;
+}
+.mini-dot.done { background: #8b84e8; border-color: #8b84e8; }
+.mini-title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: #4e4b52; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-title.done { color: #b5b1bc; text-decoration: line-through; }
+.mini-time { font-size: 10px; font-weight: 600; color: #b5b1bc; flex-shrink: 0; }
+
+/* 목표 실패 원인 레포트 (목표 메인 색 남색 계열) */
+.goal-summary {
+  background: #eef1f8;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-top: 14px;
+  text-align: left;
+}
+.goal-summary-head { font-size: 12px; font-weight: 800; color: #3e4a6e; margin-bottom: 6px; }
+.goal-summary-body { font-size: 11px; font-weight: 600; color: #5d6683; line-height: 1.7; }
