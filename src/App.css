@@ -676,3 +676,18 @@ select {
   display: flex; align-items: center; justify-content: center;
 }
 .noti-delete:hover { background: var(--surface); }
+
+/* 회원 탈퇴 페이지 */
+.withdraw-notice {
+  border: 1px solid var(--red1); background: #fff; border-radius: 14px; padding: 14px 18px;
+}
+.withdraw-notice div { display: flex; gap: 8px; font-size: 13px; color: var(--g3); padding: 5px 0; line-height: 1.55; word-break: keep-all; }
+.withdraw-notice span { color: var(--red); font-weight: 800; }
+.withdraw-check { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--g3); margin: 4px 2px 0; cursor: pointer; }
+.withdraw-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--red); cursor: pointer; }
+.withdraw-button {
+  width: 100%; padding: 16px; margin-top: 20px; border-radius: 16px;
+  background: #fff; color: var(--red); border: 1.5px solid var(--red);
+  font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.withdraw-button:disabled { opacity: .45; cursor: default; }
