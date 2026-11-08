@@ -163,6 +163,9 @@ input, select, textarea {
   border-radius: 6px;
   margin-left: 10px;
   display: inline-block;
+  /* 제목이 길어도 '높 음' 처럼 두 줄로 쪼개지지 않게 */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .badge-high { color: #ff4d4d; background: #fff5f5; }
 .badge-medium { color: #ffb700; background: #fffaf0; }

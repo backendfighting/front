@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { 
-  Mail, Lock, Eye, ChevronLeft, Flag, Bell, 
-  CheckCircle2, Circle, MoreVertical, 
+import { useState, useEffect, Fragment } from 'react';
+import {
+  Mail, Lock, Eye, ChevronLeft, Flag, Bell,
+  CheckCircle2, Circle,
   Plus, Calendar, BarChart2, ClipboardList,
-  AlertCircle, RotateCcw, X, Check, Menu, Trash2, LogOut, User, Pencil
+  AlertCircle, RotateCcw, X, Check, Menu, Trash2, LogOut, User, Pencil, Settings, ArrowUpDown
 } from 'lucide-react';
 import './App.css';
 
@@ -168,7 +168,7 @@ function ErrorView({ setView }: { setView: SetView }) {
   );
 }
 
-function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead }: any) {
+function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, onOpenSettings }: any) {
   const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
 
   useEffect(() => {
@@ -185,7 +185,7 @@ function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead }:
       <div className="header-row">
         <ChevronLeft onClick={() => setView('main')} className="cursor-pointer" color="#4e4b52" />
         <h3 className="header-title">알림</h3>
-        <div style={{ width: 24 }} />
+        <Settings size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenSettings} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', marginBottom: '24px' }}>
@@ -442,12 +442,74 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
   );
 }
 
+function NotiSettingsView({ setView, backTo = 'main' }: any) {
+  const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
+
+  const requestPerm = async () => {
+    if (typeof Notification === 'undefined') return alert('이 브라우저는 알림을 지원하지 않아요.');
+    if (Notification.permission === 'denied') {
+      return alert('이 사이트의 알림이 차단되어 있어요.\n\n브라우저 설정에서 이 사이트를 "허용"으로 바꿔주세요.');
+    }
+    const result = await Notification.requestPermission();
+    setPerm(result);
+  };
+
+  return (
+    <div className="card">
+      <div className="header-row">
+        <ChevronLeft onClick={() => setView(backTo)} className="cursor-pointer" color="#4e4b52" />
+        <h3 className="header-title">알림 설정</h3>
+        <div style={{ width: 24 }} />
+      </div>
+      <div className="scroll-content">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '16px', border: '1px solid #f1f0f5', borderRadius: '16px', marginBottom: '16px' }}>
+          <div>
+            <div style={{ fontWeight: '700', fontSize: '14px', color: '#1a191b' }}>기기 알림</div>
+            <div style={{ fontSize: '12px', color: '#b5b1bc', marginTop: '4px' }}>
+              {perm === 'granted' ? '켜져 있습니다' : perm === 'denied' ? '브라우저에서 차단됨' : '꺼져 있습니다'}
+            </div>
+          </div>
+          {perm !== 'granted' && (
+            <button className="chip" onClick={requestPerm}>켜기</button>
+          )}
+        </div>
+
+        <div style={{ background: '#f5f4ff', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', fontWeight: '700', color: '#6c63ff', marginBottom: '6px' }}>준비 중</div>
+          <div style={{ fontSize: '13px', color: '#7a7680', lineHeight: 1.6 }}>
+            할 일·루틴별 알림 시점 설정은<br />목표 기능 정리 후 추가할 예정이에요.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const DAY_OPTIONS = [
   { v: 'MONDAY', l: '월' }, { v: 'TUESDAY', l: '화' }, { v: 'WEDNESDAY', l: '수' },
   { v: 'THURSDAY', l: '목' }, { v: 'FRIDAY', l: '금' }, { v: 'SATURDAY', l: '토' }, { v: 'SUNDAY', l: '일' },
 ];
 const ALL_DAYS = DAY_OPTIONS.map(d => d.v);
 const sortDays = (days: string[]) => ALL_DAYS.filter(d => days.includes(d));
+
+// 시간 선택용 (오전/오후 + 12시간)
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
+const BASE_MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+// 2026-02-31 처럼 달력에 없는 날짜를 걸러낸다
+const isRealDate = (s: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  if (y < 2000 || y > 2100 || m < 1 || m > 12) return false;
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+};
+
+const isRealTime = (s: string) => {
+  if (!/^\d{2}:\d{2}$/.test(s || '')) return false;
+  const [h, m] = s.split(':').map(Number);
+  return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+};
 
 function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editingItem, editingKind, globalDate }: any) {
   const isEdit = !!editingItem;
@@ -468,9 +530,25 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
   const toggleDay = (d: string) =>
     setRepeatDays(prev => sortDays(prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]));
 
+  // 오전/오후 + 시 + 분 조합 (내부 값은 "HH:MM" 24시간)
+  const safeTime = isRealTime(time) ? time : '14:00';
+  const hour24 = Number(safeTime.slice(0, 2));
+  const minutePart = safeTime.slice(3, 5);
+  const meridiem: 'AM' | 'PM' = hour24 < 12 ? 'AM' : 'PM';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  const minuteOptions = BASE_MINUTES.includes(minutePart) ? BASE_MINUTES : [...BASE_MINUTES, minutePart].sort();
+  const setTimeParts = (m: 'AM' | 'PM', h12: number, min: string) => {
+    const h = (h12 % 12) + (m === 'PM' ? 12 : 0);
+    setTime(`${String(h).padStart(2, '0')}:${min}`);
+  };
+
   const handleSave = () => {
     if (!title.trim()) return alert('제목을 입력하세요.');
     if (isRoutine && repeatDays.length === 0) return alert('반복할 요일을 하나 이상 선택하세요.');
+    if (!isRoutine) {
+      if (!isRealDate(date)) return alert('날짜를 다시 확인해주세요. 달력에 없는 날짜입니다.');
+      if (!isRealTime(time)) return alert('시간을 다시 확인해주세요. 존재하지 않는 시간입니다.');
+    }
     if (isRoutineEdit) onUpdateRoutine(editingItem, title, memo, repeatDays);
     else if (isEdit) onUpdateTodo(editingItem.todoId || editingItem.id, title, memo, date, time, priority);
     else onAddTodo(title, memo, date, time, priority, type, repeatDays);
@@ -518,13 +596,37 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
         ) : (
           <>
             <div className="input-group"><label>📅 날짜 지정</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-            <div className="input-group"><label>🕒 시간 지정</label><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
-            <div className="filter-tabs" style={{ marginTop: '12px' }}>
-              {['high', 'normal', 'low'].map(p => (
-                <button key={p} className={`chip ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
-                  {p === 'high' ? '높음' : p === 'normal' ? '보통' : '낮음'}
-                </button>
-              ))}
+
+            <div className="input-group">
+              <label>🕒 시간 지정</label>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <button className={`chip ${meridiem === 'AM' ? 'active' : ''}`} style={{ padding: '10px 14px' }}
+                        onClick={() => setTimeParts('AM', hour12, minutePart)}>오전</button>
+                <button className={`chip ${meridiem === 'PM' ? 'active' : ''}`} style={{ padding: '10px 14px' }}
+                        onClick={() => setTimeParts('PM', hour12, minutePart)}>오후</button>
+                <select value={hour12} style={{ flex: 1, minWidth: 0 }}
+                        onChange={(e) => setTimeParts(meridiem, Number(e.target.value), minutePart)}>
+                  {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}시</option>)}
+                </select>
+                <select value={minutePart} style={{ flex: 1, minWidth: 0 }}
+                        onChange={(e) => setTimeParts(meridiem, hour12, e.target.value)}>
+                  {minuteOptions.map(m => <option key={m} value={m}>{m}분</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label>⭐ 중요도</label>
+              <p style={{ fontSize: '12px', color: '#b5b1bc', margin: '0 0 8px 0' }}>
+                이 할 일이 얼마나 급한지 골라주세요. 목록에서 중요도 순으로 정렬할 때 쓰여요.
+              </p>
+              <div className="filter-tabs">
+                {['high', 'normal', 'low'].map(p => (
+                  <button key={p} className={`chip ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
+                    {p === 'high' ? '높음' : p === 'normal' ? '보통' : '낮음'}
+                  </button>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -542,12 +644,16 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
   const [endDate, setEndDate] = useState(editingGoal?.endDate || globalDate);
   const [reminder, setReminder] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) return alert('목표를 입력하세요.');
+    if (!isRealDate(startDate)) return alert('시작일을 다시 확인해주세요. 달력에 없는 날짜입니다.');
+    if (!isRealDate(endDate)) return alert('목표일을 다시 확인해주세요. 달력에 없는 날짜입니다.');
     if (endDate < startDate) return alert('마감일은 시작일 이후여야 합니다.');
-    if (isEdit) onUpdateGoal(editingGoal, title, category, desc, startDate, endDate);
-    else onAddGoal(title, category, desc, startDate, endDate);
-    setView('main');
+    // 저장에 실패하면 입력한 내용이 사라지지 않도록 화면을 그대로 둔다
+    const ok = isEdit
+      ? await onUpdateGoal(editingGoal, title, category, desc, startDate, endDate)
+      : await onAddGoal(title, category, desc, startDate, endDate);
+    if (ok !== false) setView('main');
   };
 
   return (
@@ -622,7 +728,8 @@ function MainAppView({
 }: any) {
   
   const [failReasons, setFailReasons] = useState<string[]>([]);
-  
+  const [sortBy, setSortBy] = useState<'time' | 'priority'>('time');
+
   const targetDateObj = new Date(globalDate || getTodayStr());
   const calYear = targetDateObj.getFullYear();
   const calMonth = targetDateObj.getMonth() + 1;
@@ -640,10 +747,31 @@ function MainAppView({
   const daysInMonth = new Date(calYear, calMonth, 0).getDate();
   const firstDayIndex = new Date(calYear, calMonth - 1, 1).getDay();
 
-  const filteredTodos = (todos || []).filter((t:any) => {
-    if (todoFilter === 'done') return t.isCompleted === true || t.completed === true || t.done === true;
-    return true; 
-  });
+  const isItemDone = (t: any) => t.isCompleted === true || t.completed === true || t.done === true;
+
+  // 중요도 순서: 높음 > 보통 > 낮음
+  const PRIORITY_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  const sortItems = (list: any[]) => {
+    const copy = [...list];
+    if (sortBy === 'priority') {
+      copy.sort((a, b) => (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1));
+    } else {
+      // 시간 순 (시간이 없는 항목은 뒤로)
+      copy.sort((a, b) => {
+        const ta = a.todoTime ? String(a.todoTime).slice(0, 5) : '99:99';
+        const tb = b.todoTime ? String(b.todoTime).slice(0, 5) : '99:99';
+        return ta.localeCompare(tb);
+      });
+    }
+    return copy;
+  };
+
+  const filteredTodos = sortItems(
+    (todos || []).filter((t: any) => (todoFilter === 'done' ? isItemDone(t) : true))
+  );
+  const filteredRoutines = sortItems(
+    (backendRoutines || []).filter((r: any) => (todoFilter === 'done' ? r.isCompleted === true : true))
+  );
 
   const getGoalProgress = (g: any) => g.status === '성공' ? 100 : g.status === '실패' ? 0 : (g.progress || 0);
 
@@ -667,21 +795,104 @@ function MainAppView({
           <span style={{ fontWeight: '600', textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>
             {t.title}
           </span>
+          {t.todoTime && (
+            <span style={{ fontSize: '12px', color: '#b5b1bc', marginLeft: '8px', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {String(t.todoTime).slice(0, 5)}
+            </span>
+          )}
           <span className={`priority-badge ${priorityClass}`}>{priorityText}</span>
         </div>
         <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditTodo(t); }} />
-        <MoreVertical size={20} className="cursor-pointer" color="#b5b1bc" onClick={(e) => { 
-          e.stopPropagation(); 
-          if (confirm('이 일정을 삭제하시겠습니까?')) onDeleteTodo(id); 
+        <Trash2 size={18} className="cursor-pointer" color="#b5b1bc" onClick={(e) => {
+          e.stopPropagation();
+          if (confirm('이 일정을 삭제하시겠습니까?')) onDeleteTodo(id);
         }} />
       </div>
     );
   };
 
+  // 할 일 탭과 달력 탭에서 똑같이 쓰는 미션 목록 (일반 할 일 + 반복 루틴)
+  // 달력 탭에서는 전체/완료 필터와 상관없이 그 날의 미션을 전부 보여준다
+  const renderMissionLists = (ignoreFilter = false) => {
+  const todoList = ignoreFilter ? sortItems(todos || []) : filteredTodos;
+  const routineList = ignoreFilter ? sortItems(backendRoutines || []) : filteredRoutines;
+  const doneMode = !ignoreFilter && todoFilter === 'done';
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#4e4b52' }}>
+        <span style={{ color: '#ff4d4d', marginRight: '6px' }}>📌</span> 일반 할 일 ({todoList.length}개)
+      </div>
+      {todoList.length === 0 ? (
+        <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '20px 0' }}>
+          {doneMode ? '완료된 할 일이 없습니다.' : '할 일이 없습니다.'}
+        </p>
+      ) : todoList.map(renderItemRow)}
+
+      <div style={{ display: 'flex', alignItems: 'center', margin: '32px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#6c63ff' }}>
+        <span style={{ color: '#6c63ff', marginRight: '6px' }}>🔄</span> 반복 루틴 ({routineList.length}개)
+      </div>
+      {routineList.length === 0 ? (
+        <div style={{ fontSize: '13px', color: '#b5b1bc', textAlign: 'center', padding: '24px 0', borderRadius: '16px', border: '1px dashed #e0dcfc' }}>
+          {doneMode ? '완료된 루틴이 없습니다.' : '루틴 기록이 비어있습니다.'}
+        </div>
+      ) : routineList.map((r: any) => {
+        const id = r.routineId || r.id;
+        const title = r.title || '알 수 없는 루틴';
+        const isDone = r.isCompleted === true;
+
+        let pText = ''; let pClass = '';
+        if (r.priority === 'HIGH') { pText = '높음'; pClass = 'badge-high'; }
+        if (r.priority === 'MEDIUM') { pText = '보통'; pClass = 'badge-medium'; }
+        if (r.priority === 'LOW') { pText = '낮음'; pClass = 'badge-low'; }
+
+        return (
+          <div key={`routine-${id}`} className="list-item">
+            <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1 }} onClick={() => onToggleBackendRoutine(id)}>
+              {isDone ?
+                <CheckCircle2 size={22} color="#6c63ff" style={{ marginRight: 12 }} /> :
+                <Circle size={22} color="#e5e4e7" style={{ marginRight: 12 }} />
+              }
+              <span style={{ fontWeight: '600', textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>{title}</span>
+              {r.todoTime && (
+                <span style={{ fontSize: '12px', color: '#b5b1bc', marginLeft: '8px', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {String(r.todoTime).slice(0, 5)}
+                </span>
+              )}
+              {pText && <span className={`priority-badge ${pClass}`}>{pText}</span>}
+            </div>
+            <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditRoutine(r); }} />
+            <Trash2 size={18} className="cursor-pointer" color="#b5b1bc" onClick={(e) => {
+              e.stopPropagation();
+              if (confirm('이 루틴을 삭제하시겠습니까?')) onDeleteRoutine(id);
+            }} />
+          </div>
+        );
+      })}
+    </>
+  );
+  };
+
+  // 전체/완료 필터 + 시간 순·중요도 순 정렬
+  const renderFilterBar = () => (
+    <div className="filter-tabs" style={{ marginBottom: '24px', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button className={`chip ${todoFilter === 'all' ? 'active' : ''}`} onClick={() => setTodoFilter('all')}>전체</button>
+        <button className={`chip ${todoFilter === 'done' ? 'active' : ''}`} onClick={() => setTodoFilter('done')}>완료</button>
+      </div>
+      <button
+        className="chip"
+        title="정렬 기준 바꾸기"
+        style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+        onClick={() => setSortBy(sortBy === 'time' ? 'priority' : 'time')}
+      >
+        <ArrowUpDown size={13} /> {sortBy === 'time' ? '시간 순' : '중요도 순'}
+      </button>
+    </div>
+  );
+
   const renderTabContent = () => {
     switch(activeTab) {
-      case 'todo': 
-        const regularTodos = filteredTodos || [];
+      case 'todo':
         const totalMissions = (todos || []).length + (backendRoutines || []).length;
         const doneTodos = (todos || []).filter((t:any) => t.isCompleted === true || t.completed === true || t.done === true).length;
         const doneRoutines = (backendRoutines || []).filter((r:any) => r.isCompleted === true).length;
@@ -693,17 +904,10 @@ function MainAppView({
           <>
             <div className="header-row">
               <Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} />
-              <h3 className="header-title">할 일 <span style={{fontSize:'13px', color:'#6c63ff', marginLeft:'8px'}}>{calMonth}/{selectedCalendarDay}</span></h3>
+              <h3 className="header-title">오늘의 미션 <span style={{fontSize:'13px', color:'#6c63ff', marginLeft:'8px'}}>{calMonth}/{selectedCalendarDay}</span></h3>
               <Bell size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenNoti} />
             </div>
-            <div className="filter-tabs" style={{ marginBottom: '24px' }}>
-              <button className={`chip ${todoFilter === 'all' ? 'active' : ''}`} onClick={() => setTodoFilter('all')}>전체</button>
-              <button className={`chip ${todoFilter === 'today' ? 'active' : ''}`} onClick={() => {
-                setGlobalDate(getTodayStr()); 
-                setTodoFilter('all');
-              }}>오늘로 이동</button>
-              <button className={`chip ${todoFilter === 'done' ? 'active' : ''}`} onClick={() => setTodoFilter('done')}>완료</button>
-            </div>
+            {renderFilterBar()}
             <div className="scroll-content">
               <div className="dashboard-card" style={{ background: '#f5f4ff', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '32px' }}>
                 <span style={{ fontSize: '13px', fontWeight: '700', color: '#6c63ff' }}>해당 일자 미션 종합 달성도</span>
@@ -711,55 +915,16 @@ function MainAppView({
                 <span style={{ fontSize: '13px', color: '#7a7680', fontWeight: '600' }}>남은 미션: {remainCount}개</span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#4e4b52' }}>
-                <span style={{ color: '#ff4d4d', marginRight: '6px' }}>📌</span> 일반 할 일 ({regularTodos.length}개)
-              </div>
-              {regularTodos.length === 0 ? 
-                <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '20px 0' }}>할 일이 없습니다.</p> : 
-                regularTodos.map(renderItemRow)
-              }
-
-              <div style={{ display: 'flex', alignItems: 'center', margin: '32px 0 12px 4px', fontSize: '14px', fontWeight: '700', color: '#6c63ff' }}>
-                <span style={{ color: '#6c63ff', marginRight: '6px' }}>🔄</span> 반복 루틴 ({(backendRoutines || []).length}개)
-              </div>
-              {!backendRoutines || backendRoutines.length === 0 ? (
-                <div style={{ fontSize: '13px', color: '#b5b1bc', textAlign: 'center', padding: '24px 0', borderRadius: '16px', border: '1px dashed #e0dcfc' }}>루틴 기록이 비어있습니다.</div>
-              ) : (
-                backendRoutines.map((r: any) => {
-                  const id = r.routineId || r.id; 
-                  const title = r.title || '알 수 없는 루틴';
-                  const isDone = r.isCompleted === true;
-                  
-                  let pText = '높음'; let pClass = 'badge-high';
-                  if (r.priority === 'MEDIUM') { pText = '보통'; pClass = 'badge-medium'; }
-                  if (r.priority === 'LOW') { pText = '낮음'; pClass = 'badge-low'; }
-
-                  return (
-                    <div key={`routine-${id}`} className="list-item">
-                      <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', flex: 1 }} onClick={() => onToggleBackendRoutine(id)}>
-                        {isDone ? 
-                          <CheckCircle2 size={22} color="#6c63ff" style={{ marginRight: 12 }} /> : 
-                          <Circle size={22} color="#e5e4e7" style={{ marginRight: 12 }} />
-                        }
-                        <span style={{ fontWeight: '600', textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#b5b1bc' : '#333' }}>{title}</span>
-                        <span className={`priority-badge ${pClass}`}>{pText}</span>
-                      </div>
-                                            <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditRoutine(r); }} />
-                      <MoreVertical size={20} className="cursor-pointer" color="#b5b1bc" onClick={(e) => { 
-                        e.stopPropagation(); 
-                        if (confirm('이 루틴을 삭제하시겠습니까?')) onDeleteRoutine(id); 
-                      }} />
-                    </div>
-                  );
-                })
-              )}
+              {renderMissionLists()}
             </div>
             <div className="fab" onClick={() => setView('todo-add')}><Plus /></div>
           </>
         );
 
-      case 'calendar': 
-        const allMissionsForDay = [...(todos || []), ...(backendRoutines || [])];
+      case 'calendar':
+        const todayObj = new Date();
+        const isTodayInView = todayObj.getFullYear() === calYear && todayObj.getMonth() + 1 === calMonth;
+        const todayDayNum = todayObj.getDate();
         return (
           <>
             <div className="header-row"><Menu size={22} className="cursor-pointer" onClick={onOpenMenu} /><h3 className="header-title">달력</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
@@ -775,24 +940,34 @@ function MainAppView({
                   {Array(firstDayIndex).fill(null).map((_, i) => <div key={`e-${i}`} className="calendar-cell empty"></div>)}
                   {Array(daysInMonth).fill(null).map((_, i) => {
                     const dayNum = i + 1;
+                    const isToday = isTodayInView && dayNum === todayDayNum;
                     return (
-                      <div key={dayNum} className={`calendar-cell ${dayNum === selectedCalendarDay ? 'active' : ''}`} 
+                      <div key={dayNum} className={`calendar-cell ${dayNum === selectedCalendarDay ? 'active' : ''}`}
+                           style={isToday ? {
+                             border: '2px solid #6c63ff',
+                             flexDirection: 'column',
+                             gap: '1px',
+                             lineHeight: 1,
+                           } : undefined}
                            onClick={() => {
                              const newDateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
                              setGlobalDate(newDateStr);
                            }}>
                         {dayNum}
+                        {/* 오늘 날짜 표시 */}
+                        {isToday && (
+                          <span style={{ fontSize: '8px', fontWeight: '700', color: dayNum === selectedCalendarDay ? '#fff' : '#6c63ff' }}>오늘</span>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
-              <div style={{ marginTop: '16px', fontWeight: '700' }}>{calMonth}월 {selectedCalendarDay}일 미션 목록 ({allMissionsForDay.length}개)</div>
-              {allMissionsForDay.map((t: any) => (
-                <div key={`cal-item-${t.id || t.routineId || t.todoId || Math.random()}`} className="list-item" style={{ background: '#fff', padding: '12px 16px', marginBottom: '8px' }}>
-                  <span style={{ fontWeight: '600', fontSize: '14px' }}>{t.title || '제목 없음'}</span>
-                </div>
-              ))}
+              <div style={{ marginTop: '20px', fontWeight: '700', fontSize: '15px' }}>
+                {calMonth}월 {selectedCalendarDay}일 미션
+              </div>
+              {/* 달력에서도 할 일 페이지처럼 바로 완료 처리 가능 */}
+              {renderMissionLists(true)}
             </div>
           </>
         );
@@ -971,10 +1146,11 @@ function MainAppView({
 
   return (
     <div className="card" style={{ paddingBottom: '80px' }}>
-      {renderTabContent()}
-      
+      {/* 탭마다 화면 구조가 달라서, key를 주어 탭이 바뀔 때 이전 탭의 요소가 남지 않도록 함 */}
+      <Fragment key={activeTab}>{renderTabContent()}</Fragment>
+
       <div className="bottom-nav" style={{ justifyContent: 'space-around' }}>
-        <div className={`nav-item ${activeTab === 'todo' ? 'active' : ''}`} onClick={() => setActiveTab('todo')}><ClipboardList size={22} /><span>할 일</span></div>
+        <div className={`nav-item ${activeTab === 'todo' ? 'active' : ''}`} onClick={() => setActiveTab('todo')}><ClipboardList size={22} /><span>오늘의 미션</span></div>
         <div className={`nav-item ${activeTab === 'calendar' ? 'active' : ''}`} onClick={() => setActiveTab('calendar')}><Calendar size={22} /><span>달력</span></div>
         <div className={`nav-item ${activeTab === 'goal' ? 'active' : ''}`} onClick={() => setActiveTab('goal')}><Flag size={22} /><span>목표</span></div>
         <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><BarChart2 size={22} /><span>통계</span></div>
@@ -1027,8 +1203,17 @@ function MainAppView({
   );
 }
 
+// 새로고침해도 돌아올 수 있는 화면들 (추가/수정 화면은 입력 중이던 내용이 없으므로 제외)
+const RESTORABLE_VIEWS = ['main', 'profile', 'password', 'routines', 'noti', 'noti-settings'];
+const TABS = ['todo', 'calendar', 'goal', 'stats'];
+
 function App() {
-  const [view, setView] = useState<string>('login');
+  // 토큰이 남아 있으면 로그인 상태를 유지하고, 보고 있던 화면으로 복원
+  const [view, setView] = useState<string>(() => {
+    if (!localStorage.getItem('token')) return 'login';
+    const saved = localStorage.getItem('lastView') || '';
+    return RESTORABLE_VIEWS.includes(saved) ? saved : 'main';
+  });
     const [editingItem, setEditingItem] = useState<any>(null);
   const [editingKind, setEditingKind] = useState<string | null>(null);
   const [editingGoal, setEditingGoal] = useState<any>(null);
@@ -1036,7 +1221,16 @@ function App() {
   useEffect(() => {
     if (view === 'main') { setEditingItem(null); setEditingKind(null); setEditingGoal(null); }
   }, [view]);
-  const [activeTab, setActiveTab] = useState<string>('todo'); 
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const saved = localStorage.getItem('lastTab') || '';
+    return TABS.includes(saved) ? saved : 'todo';
+  });
+
+  // 현재 화면·탭을 기억해 두었다가 새로고침 시 복원
+  useEffect(() => {
+    if (RESTORABLE_VIEWS.includes(view)) localStorage.setItem('lastView', view);
+  }, [view]);
+  useEffect(() => { localStorage.setItem('lastTab', activeTab); }, [activeTab]);
   const [globalDate, setGlobalDate] = useState<string>(getTodayStr());
   
   // 🌟 안전장치 초기값 적용
@@ -1045,6 +1239,8 @@ function App() {
   const [backendRoutines, setBackendRoutines] = useState<any[]>([]);
   
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  // 알림 설정 화면에서 뒤로가기를 눌렀을 때 돌아갈 곳
+  const [notiSettingsBack, setNotiSettingsBack] = useState<string>('main');
   const [userProfile, setUserProfile] = useState<{name: string, email: string}>({ name: '사용자', email: '이메일 없음' });
 
   const [notiFilter, setNotiFilter] = useState<string>('all');
@@ -1247,13 +1443,20 @@ function App() {
   const handleAddGoal = async (title: string, category: string, desc: string, startDate: string, endDate: string) => {
     const token = localStorage.getItem('token');
     try {
+      const payload = { title, category, description: desc, startDate, endDate };
       const response = await fetch(`${BASE_URL}/api/goals`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify({ title, category, description: desc, startDate, endDate })
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify(payload)
       });
-      if (response.ok) fetchGoals();
-      else alert(`목표 추가에 실패했습니다. (오류 코드 ${response.status})`);
-    } catch {
-      alert('서버와 통신할 수 없습니다.');
+      if (response.ok) { fetchGoals(); return true; }
+      // 서버가 알려준 실제 원인을 그대로 보여준다
+      const msg = await readError(response);
+      console.error('목표 추가 실패', response.status, msg, payload);
+      alert(`목표 추가에 실패했습니다.\n\n${msg}`);
+      return false;
+    } catch (e) {
+      console.error('목표 추가 통신 실패', e);
+      alert('서버와 통신할 수 없습니다. 백엔드가 켜져 있는지 확인해주세요.');
+      return false;
     }
   };
 
@@ -1298,15 +1501,22 @@ function App() {
         headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
         body: JSON.stringify({ title, category, description: desc, startDate, endDate })
       });
-      if (res.ok) fetchGoals();
-      else alert(`목표 수정에 실패했습니다. (오류 코드 ${res.status})`);
-    } catch {
-      alert('서버와 통신할 수 없습니다.');
+      if (res.ok) { fetchGoals(); return true; }
+      const msg = await readError(res);
+      console.error('목표 수정 실패', res.status, msg);
+      alert(`목표 수정에 실패했습니다.\n\n${msg}`);
+      return false;
+    } catch (e) {
+      console.error('목표 수정 통신 실패', e);
+      alert('서버와 통신할 수 없습니다. 백엔드가 켜져 있는지 확인해주세요.');
+      return false;
     }
   };
   const handleLogout = () => {
     if (confirm('로그아웃 하시겠습니까?')) {
-      localStorage.removeItem('token'); 
+      localStorage.removeItem('token');
+      localStorage.removeItem('lastView');
+      localStorage.removeItem('lastTab');
       setView('login');
       setIsSidebarOpen(false);
     }
@@ -1323,6 +1533,8 @@ function App() {
         if (response.ok) {
           alert('회원 탈퇴가 완료되었습니다.');
           localStorage.removeItem('token');
+          localStorage.removeItem('lastView');
+          localStorage.removeItem('lastTab');
           setView('login');
           setIsSidebarOpen(false);
         } else {
@@ -1477,6 +1689,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
           notiFilter={notiFilter} 
           setNotiFilter={setNotiFilter} 
           onRead={handleReadNotification}
+          onOpenSettings={() => { setNotiSettingsBack('noti'); setView('noti-settings'); }}
         />
       )}
       
@@ -1529,10 +1742,11 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
                     { key: 'profile', label: '프로필 수정', icon: <User size={18} style={{ marginRight: '12px' }} /> },
                     { key: 'password', label: '비밀번호 변경', icon: <Lock size={18} style={{ marginRight: '12px' }} /> },
                     { key: 'routines', label: '루틴 관리', icon: <RotateCcw size={18} style={{ marginRight: '12px' }} /> },
+                    { key: 'noti-settings', label: '알림 설정', icon: <Bell size={18} style={{ marginRight: '12px' }} /> },
                   ].map(m => (
                     <div key={m.key} className="cursor-pointer"
                          style={{ background: '#f5f4ff', color: '#6c63ff', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '14px' }}
-                         onClick={() => { setIsSidebarOpen(false); setView(m.key); }}>
+                         onClick={() => { setIsSidebarOpen(false); setNotiSettingsBack('main'); setView(m.key); }}>
                       {m.icon} {m.label}
                     </div>
                   ))}
@@ -1554,6 +1768,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
             {view === 'todo-add' && <TodoAddView setView={setView} onAddTodo={handleAddTodo} onUpdateTodo={handleUpdateTodo} onUpdateRoutine={handleUpdateRoutine} editingItem={editingItem} editingKind={editingKind} globalDate={globalDate} />}
       {view === 'profile' && <ProfileView setView={setView} userProfile={userProfile} setUserProfile={setUserProfile} />}
       {view === 'password' && <PasswordView setView={setView} />}
+      {view === 'noti-settings' && <NotiSettingsView setView={setView} backTo={notiSettingsBack} />}
       {view === 'routines' && <RoutineManageView setView={setView} onEditRoutine={handleEditRoutine} onDeleteRoutine={handleDeleteRoutine} />}
       {view === 'goal-add' && <GoalAddView setView={setView} onAddGoal={handleAddGoal} onUpdateGoal={handleUpdateGoal} editingGoal={editingGoal} globalDate={globalDate} />}
     </div>
