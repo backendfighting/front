@@ -2,7 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import {
   Mail, Lock, Eye, ChevronLeft, Flag, Bell,
   CheckCircle2, Circle,
-  Plus, Calendar, BarChart2, ClipboardList,
+  Plus, Calendar, BarChart2, ClipboardList, Repeat,
   AlertCircle, RotateCcw, X, Check, Menu, Trash2, LogOut, User, Pencil, Settings, ArrowUpDown
 } from 'lucide-react';
 import './App.css';
@@ -512,6 +512,134 @@ const sortDays = (days: string[]) => ALL_DAYS.filter(d => days.includes(d));
 
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
+// ===== 통계 계산 =====
+const DOW_KEYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+
+// 통계에 필요한 기간: 요약은 최근 3개월, 그래프는 이번 주/이번 달/올해
+const statsRanges = (today: Date) => {
+  const summaryStart = addDays(new Date(today.getFullYear(), today.getMonth() - 3, today.getDate()), 1);
+  const yearStart = new Date(today.getFullYear(), 0, 1);
+  const weekStart = addDays(today, -today.getDay());
+  const fetchStart = [summaryStart, yearStart, weekStart].reduce((a, b) => (a < b ? a : b));
+  return { summaryStart, yearStart, weekStart, fetchStart };
+};
+
+type DayStat = { expected: number; done: number };
+
+// 그 날짜에 달력에 보이는 루틴인지 (켜져 있고, 요일이 맞고, 시작일~종료일 사이)
+// 종료일은 '이 날부터 안 보임'을 뜻한다
+const isScheduledOn = (r: any, k: string, dow: string) =>
+  r.active !== false &&
+  Array.isArray(r.repeatDays) && r.repeatDays.includes(dow) &&
+  (!r.startDate || String(r.startDate).slice(0, 10) <= k) &&
+  (!r.endDate || k < String(r.endDate).slice(0, 10));
+
+const groupDoneRecords = (records: any[]) => {
+  const byDate: Record<string, any[]> = {};
+  records.forEach((r: any) => {
+    if (r.completed === false) return;
+    const k = String(r.recordDate).slice(0, 10);
+    (byDate[k] = byDate[k] || []).push(r);
+  });
+  return byDate;
+};
+
+// 날짜마다 "해야 했던 루틴"과 "실제로 한 루틴"을 루틴 단위로 센다.
+// 체크한 루틴은 그날 해야 했던 루틴에도 반드시 포함되므로 달성률이 100%를 넘지 않는다.
+const buildDailyStats = (routines: any[], records: any[], start: Date, end: Date) => {
+  const doneByDate = groupDoneRecords(records);
+  const out: Record<string, DayStat> = {};
+  for (let d = new Date(start); toDateStr(d) <= toDateStr(end); d = addDays(d, 1)) {
+    const k = toDateStr(d);
+    const dow = DOW_KEYS[d.getDay()];
+    const expectedIds = new Set<any>(routines.filter((r: any) => isScheduledOn(r, k, dow)).map((r: any) => r.routineId));
+    const doneIds = new Set<any>((doneByDate[k] || []).map((r: any) => r.routineId));
+    doneIds.forEach(id => expectedIds.add(id));
+    out[k] = { expected: expectedIds.size, done: doneIds.size };
+  }
+  return out;
+};
+
+const sumRange = (daily: Record<string, DayStat>, from: Date, to: Date) => {
+  let e = 0, d = 0;
+  for (let x = new Date(from); toDateStr(x) <= toDateStr(to); x = addDays(x, 1)) {
+    const v = daily[toDateStr(x)];
+    if (v) { e += v.expected; d += v.done; }
+  }
+  return { e, d };
+};
+
+// 기록이 하나도 없는 구간은 0%가 아니라 '기록 없음'(null)
+const rangeRate = (daily: Record<string, DayStat>, from: Date, to: Date) => {
+  const { e, d } = sumRange(daily, from, to);
+  return e > 0 ? Math.round((d / e) * 100) : null;
+};
+
+// 요일별 달성률 (from~to 사이만)
+const buildWeekdayStats = (daily: Record<string, DayStat>, from: Date, to: Date) => {
+  const agg = Array.from({ length: 7 }, () => ({ expected: 0, done: 0 }));
+  for (let x = new Date(from); toDateStr(x) <= toDateStr(to); x = addDays(x, 1)) {
+    const v = daily[toDateStr(x)];
+    if (!v) continue;
+    agg[x.getDay()].expected += v.expected;
+    agg[x.getDay()].done += v.done;
+  }
+  return agg.map((a, i) => ({
+    label: WEEKDAY_KO[i],
+    expected: a.expected,
+    rate: a.expected > 0 ? Math.round((a.done / a.expected) * 100) : null,
+  }));
+};
+
+// 카테고리별 루틴 달성률 (루틴 단위로 셈)
+const buildCategoryStats = (routines: any[], records: any[], start: Date, end: Date) => {
+  const doneByDate = groupDoneRecords(records);
+  const exp: Record<string, number> = {};
+  const done: Record<string, number> = {};
+  for (let d = new Date(start); toDateStr(d) <= toDateStr(end); d = addDays(d, 1)) {
+    const k = toDateStr(d);
+    const dow = DOW_KEYS[d.getDay()];
+    const catOf = new Map<any, string>();
+    routines.forEach((r: any) => { if (isScheduledOn(r, k, dow)) catOf.set(r.routineId, r.category || '기타'); });
+    (doneByDate[k] || []).forEach((rec: any) => {
+      if (!catOf.has(rec.routineId)) catOf.set(rec.routineId, rec.category || '기타');
+      const c = catOf.get(rec.routineId) as string;
+      done[c] = (done[c] || 0) + 1;
+    });
+    catOf.forEach(c => { exp[c] = (exp[c] || 0) + 1; });
+  }
+  return Object.keys(exp).map(c => ({
+    name: c, done: done[c] || 0, expected: exp[c],
+    rate: Math.round(((done[c] || 0) / exp[c]) * 100),
+  })).sort((a, b) => b.rate - a.rate);
+};
+
+// 지난 달 대비 증감률 (상대 비율: 14% -> 0% 이면 100% 감소)
+const monthOverMonth = (daily: Record<string, DayStat>, today: Date) => {
+  const thisM = sumRange(daily, new Date(today.getFullYear(), today.getMonth(), 1), today);
+  const lastM = sumRange(daily, new Date(today.getFullYear(), today.getMonth() - 1, 1), new Date(today.getFullYear(), today.getMonth(), 0));
+  if (thisM.e === 0 || lastM.e === 0) return { kind: 'none' as const };
+  const now = thisM.d / thisM.e;
+  const before = lastM.d / lastM.e;
+  if (before === 0) return now === 0 ? { kind: 'same' as const } : { kind: 'fromZero' as const, now: Math.round(now * 100) };
+  const pct = Math.round(((now - before) / before) * 100);
+  if (pct === 0) return { kind: 'same' as const };
+  return { kind: pct > 0 ? ('up' as const) : ('down' as const), pct: Math.abs(pct) };
+};
+
+// 달성률이 가장 낮은 항목들 (동점이면 전부)
+const lowestOf = <T extends { rate: number | null }>(items: T[]) => {
+  const valid = items.filter(x => x.rate !== null);
+  if (valid.length === 0) return [];
+  const min = Math.min(...valid.map(x => x.rate as number));
+  return valid.filter(x => x.rate === min);
+};
+
+
+
 // 루틴과 목표가 함께 쓰는 카테고리
 const CATEGORIES = ['공부', '업무', '운동', '건강', '취미', '자기 관리', '생활 습관', '기타'];
 // 예전에 저장된 카테고리(독서 등)도 목록에서 사라지지 않도록
@@ -753,7 +881,8 @@ function MainAppView({
   onToggleBackendRoutine, onUpdateGoalStatus, onDeleteTodo, onDeleteGoal, onDeleteRoutine, onToggleTodo,
   globalDate, setGlobalDate,
   onOpenNoti, onOpenMenu,
-  onEditTodo, onEditRoutine, onEditGoal 
+  onEditTodo, onEditRoutine, onEditGoal,
+  statsRecords = [], allRoutines = []
 }: any) {
   
   const [failReasons, setFailReasons] = useState<string[]>([]);
@@ -917,7 +1046,7 @@ function MainAppView({
       })}
 
       {/* 추가 버튼이 마지막 루틴의 수정·삭제 버튼을 가리지 않도록 넉넉히 비워둔다 */}
-      <div style={{ textAlign: 'center', color: '#c9c5d0', fontSize: '12px', fontWeight: '600', lineHeight: 1.8, padding: '64px 0 130px' }}>
+      <div style={{ textAlign: 'center', color: '#c9c5d0', fontSize: '12px', fontWeight: '600', lineHeight: 1.8, padding: '64px 0 69px' }}>
         꾸준한 실천으로 만드는 갓생 루틴!<br />Goal Tracker가 응원합니다.
       </div>
     </>
@@ -942,16 +1071,28 @@ function MainAppView({
     </div>
   );
 
+  // 선택한 날짜(globalDate)의 미션 달성도
+  const missionProgress = () => {
+    const total = (todos || []).length + (backendRoutines || []).length;
+    const done = (todos || []).filter((t: any) => isItemDone(t)).length
+      + (backendRoutines || []).filter((r: any) => r.isCompleted === true).length;
+    return { total, remain: total - done, rate: total > 0 ? Math.round((done / total) * 100) : 0 };
+  };
+
+  const renderProgressCard = (label: string) => {
+    const p = missionProgress();
+    return (
+      <div className="dashboard-card" style={{ background: '#f5f4ff', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '32px' }}>
+        <span style={{ fontSize: '13px', fontWeight: '700', color: '#6c63ff' }}>{label}</span>
+        <h3 style={{ fontSize: '21px', fontWeight: '800', margin: '8px 0 6px 0', color: '#1a191b' }}>{p.rate}% 완료</h3>
+        <span style={{ fontSize: '10.5px', color: '#7a7680', fontWeight: '500' }}>남은 미션 : {p.remain}개</span>
+      </div>
+    );
+  };
+
   const renderTabContent = () => {
     switch(activeTab) {
       case 'todo':
-        const totalMissions = (todos || []).length + (backendRoutines || []).length;
-        const doneTodos = (todos || []).filter((t:any) => t.isCompleted === true || t.completed === true || t.done === true).length;
-        const doneRoutines = (backendRoutines || []).filter((r:any) => r.isCompleted === true).length;
-        const doneTotal = doneTodos + doneRoutines;
-        const remainCount = totalMissions - doneTotal;
-        const liveProgress = totalMissions > 0 ? Math.round((doneTotal / totalMissions) * 100) : 0;
-
         return (
           <>
             <div className="header-row">
@@ -961,11 +1102,7 @@ function MainAppView({
             </div>
             {renderFilterBar()}
             <div className="scroll-content">
-              <div className="dashboard-card" style={{ background: '#f5f4ff', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '32px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '700', color: '#6c63ff' }}>오늘의 미션 종합 달성도</span>
-                <h3 style={{ fontSize: '26px', fontWeight: '800', margin: '8px 0 6px 0', color: '#1a191b' }}>{liveProgress}% 완료</h3>
-                <span style={{ fontSize: '13px', color: '#7a7680', fontWeight: '600' }}>남은 미션: {remainCount}개</span>
-              </div>
+              {renderProgressCard('오늘의 미션 종합 달성도')}
 
               {renderMissionLists()}
             </div>
@@ -990,6 +1127,7 @@ function MainAppView({
                 <Bell size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenNoti} />
               </div>
               <div className="scroll-content">
+                {renderProgressCard('미션 종합 달성도')}
                 {renderMissionLists(true)}
               </div>
               <div className="fab" onClick={() => setView('todo-add')}><Plus /></div>
@@ -1070,6 +1208,9 @@ function MainAppView({
               <div style={{ marginTop: '20px', fontWeight: '700', fontSize: '15px' }}>
                 {calMonth}월 {selectedCalendarDay}일 미션
               </div>
+              <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '500', color: '#7a7680' }}>
+                종합 미션 달성률 {missionProgress().rate}%
+              </div>
               {/* 달력에서도 할 일 페이지처럼 바로 완료 처리 가능 */}
               {renderMissionLists(true)}
             </div>
@@ -1126,7 +1267,7 @@ function MainAppView({
                       </span>
                       <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
   <Pencil size={18} color="#b5b1bc" onClick={(e) => { e.stopPropagation(); onEditGoal(g); }} />
-  <Trash2 size={18} color="#ff4d4d" onClick={(e) => { e.stopPropagation(); if(confirm('삭제하시겠습니까?')) onDeleteGoal(g.id); }} />
+  <Trash2 size={18} color="#b5b1bc" className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if(confirm('삭제하시겠습니까?')) onDeleteGoal(g.id); }} />
 </div>
                     </div>
                   </div>
@@ -1137,114 +1278,208 @@ function MainAppView({
           </>
         );
 
-      case 'stats': 
-        let chartData: { label: string; rate: number }[] = [];
-        
-        const [bYear, bMonthStr, bDayStr] = (globalDate || getTodayStr()).split('-');
-        const currentYear = parseInt(bYear || '2026');
-        const currentMonth = parseInt(bMonthStr || '1') - 1; 
+      case 'stats': {
+        const today = new Date();
+        const thisYear = today.getFullYear();
+        const { summaryStart, weekStart, fetchStart } = statsRanges(today);
 
-        const calculateRate = (filterFn: (y: number, m: number, d: number, fullDate: string) => boolean) => {
-          const matchedGoals = (goals || []).filter((g: any) => {
-            if (!g.endDate) return false;
-            const [gy, gm, gd] = g.endDate.split('-').map(Number);
-            return filterFn(gy, gm - 1, gd, g.endDate);
-          });
-          const successCount = matchedGoals.filter((g: any) => g.status === '성공').length;
-          return matchedGoals.length > 0 ? Math.round((successCount / matchedGoals.length) * 100) : 0;
-        };
+        // 올해 + 최근 3개월을 한 번에 계산해 두고 필요한 구간만 꺼내 쓴다
+        const daily = buildDailyStats(allRoutines || [], statsRecords || [], fetchStart, today);
+        const hasRecentData = sumRange(daily, summaryStart, today).e > 0;
 
-        if (statsPeriod === 'week') {
-          const base = new Date(currentYear, currentMonth, parseInt(bDayStr || '1'));
-          const day = base.getDay();
-          const diff = base.getDate() - day + (day === 0 ? -6 : 1); 
-          const monday = new Date(base.setDate(diff));
+        // --- 기간별 그래프: 일간=이번 주, 주간=이번 달 주차, 월간=올해 ---
+        const period = statsPeriod === 'day' ? 'day' : statsPeriod === 'month' ? 'month' : 'week';
+        const chartData: { label: string; rate: number | null }[] = [];
+        let periodDesc = '';
 
-          const weekLabels = ['월', '화', '수', '목', '금', '토', '일'];
-          chartData = weekLabels.map((label, index) => {
-            const tDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index);
-            const tDateStr = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}-${String(tDate.getDate()).padStart(2, '0')}`;
-            return { label, rate: calculateRate((_y, _m, _d, fullDate) => fullDate === tDateStr) };
-          });
-
-        } else if (statsPeriod === 'month') {
-          const monthLabels = ['1주차', '2주차', '3주차', '4주차', '5주차'];
-          chartData = monthLabels.map((label, index) => {
-            const startDay = index * 7 + 1;
-            const endDay = (index + 1) * 7;
-            return { 
-              label, 
-              rate: calculateRate((y, m, d) => y === currentYear && m === currentMonth && d >= startDay && d <= endDay) 
-            };
-          });
-
-        } else if (statsPeriod === 'year') {
-          const yearLabels = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
-          chartData = yearLabels.map((label, index) => {
-            return { label, rate: calculateRate((y, m) => y === currentYear && m === index) };
-          });
+        if (period === 'day') {
+          periodDesc = '이번 주 요일별 달성 통계를 보여드려요';
+          for (let i = 0; i < 7; i++) {
+            const d = addDays(weekStart, i);
+            chartData.push({ label: WEEKDAY_KO[d.getDay()], rate: toDateStr(d) <= toDateStr(today) ? rangeRate(daily, d, d) : null });
+          }
+        } else if (period === 'week') {
+          periodDesc = '이번 달 주차별 달성 통계를 보여드려요';
+          // 달력의 한 줄(일~토)이 한 주차
+          const first = new Date(today.getFullYear(), today.getMonth(), 1);
+          const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          const weeks = Math.ceil((first.getDay() + last.getDate()) / 7);
+          for (let w = 0; w < weeks; w++) {
+            const rowStart = addDays(first, w * 7 - first.getDay());
+            const from = rowStart < first ? first : rowStart;
+            const rowEnd = addDays(rowStart, 6);
+            const to = rowEnd > last ? last : rowEnd;
+            chartData.push({ label: `${w + 1}주차`, rate: toDateStr(from) <= toDateStr(today) ? rangeRate(daily, from, to < today ? to : today) : null });
+          }
+        } else {
+          periodDesc = '이번 년도 월별 달성 통계를 보여드려요';
+          for (let m = 0; m < 12; m++) {
+            const from = new Date(thisYear, m, 1);
+            const to = new Date(thisYear, m + 1, 0);
+            chartData.push({ label: `${m + 1}월`, rate: from <= today ? rangeRate(daily, from, to < today ? to : today) : null });
+          }
         }
+        const maxRateValue = Math.max(0, ...chartData.map(c => c.rate ?? 0));
 
-        const failedGoals = (goals || []).filter((g: any) => g.status === '실패');
-        const totalFailed = failedGoals.length;
-        const counts: Record<string, number> = { '⏱️ 시간 부족': 0, '🎯 동기 부족': 0, '🔋 체력 저하': 0, '📅 계획 오류': 0, '🌍 외부 요인': 0 };
-        
-        failedGoals.forEach((g: any) => { 
-          if (g.reason) {
-            const reasonsArray = g.reason.split(',').map((r: string) => r.trim());
-            reasonsArray.forEach((r: string) => {
-              if (counts[r] !== undefined) counts[r]++;
-            });
-          } 
+        // --- 요약 (최근 3개월 기준) ---
+        const worstDays = lowestOf(buildWeekdayStats(daily, summaryStart, today));
+        const mom = monthOverMonth(daily, today);
+        const routineCats = buildCategoryStats(allRoutines || [], statsRecords || [], summaryStart, today);
+        const worstRoutineCats = lowestOf(routineCats);
+
+        // --- 목표: 올해 기준 ---
+        const yearGoals = (goals || []).filter((g: any) => {
+          const base = g.endDate || g.startDate || g.createdAt;
+          return base ? Number(String(base).slice(0, 4)) === thisYear : false;
         });
+        const goalCatMap: Record<string, { success: number; done: number; total: number }> = {};
+        yearGoals.forEach((g: any) => {
+          const c = g.category || '기타';
+          if (!goalCatMap[c]) goalCatMap[c] = { success: 0, done: 0, total: 0 };
+          goalCatMap[c].total++;
+          if (g.status === '성공') { goalCatMap[c].success++; goalCatMap[c].done++; }
+          if (g.status === '실패') goalCatMap[c].done++;
+        });
+        const goalCats = Object.keys(goalCatMap).map(c => {
+          const v = goalCatMap[c];
+          return { name: c, ...v, rate: v.done > 0 ? Math.round((v.success / v.done) * 100) : null };
+        }).sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1));
 
+        const failedGoals = yearGoals.filter((g: any) => g.status === '실패');
+        const counts: Record<string, number> = { '⏱️ 시간 부족': 0, '🎯 동기 부족': 0, '🔋 체력 저하': 0, '📅 계획 오류': 0, '🌍 외부 요인': 0 };
+        failedGoals.forEach((g: any) => {
+          if (!g.reason) return;
+          g.reason.split(',').map((r: string) => r.trim()).forEach((r: string) => {
+            if (counts[r] !== undefined) counts[r]++;
+          });
+        });
         const dynamicFailData = Object.keys(counts).map(name => ({
           name,
-          rate: totalFailed > 0 ? Math.round((counts[name] / totalFailed) * 100) : 0,
-          color: name === '⏱️ 시간 부족' ? '#ff4d4d' : '#ffb700'
+          rate: failedGoals.length > 0 ? Math.round((counts[name] / failedGoals.length) * 100) : 0,
         }));
 
-        const maxRateValue = chartData.length > 0 ? Math.max(...chartData.map(c => c.rate)) : 0;
+        // 저채도·중명도 보라 (요약에서 강조할 때)
+        const MUTED_PURPLE = '#8478b0';
+
+        const sectionTitle = (icon: any, text: string, sub: string, color: string) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 14px 2px' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '10px', background: color + '1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '15px', fontWeight: '800', color: '#1a191b', lineHeight: 1.2 }}>{text}</div>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: color }}>{sub}</div>
+            </div>
+          </div>
+        );
+
+        const barRow = (name: string, rate: number | null, note: string, color: string) => (
+          <div key={name} style={{ fontSize: '13px', marginBottom: '16px', textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontWeight: '600', color: '#4e4b52' }}>
+              <span>{name}</span>
+              <span style={{ color: rate === null ? '#c9c5d0' : '#4e4b52' }}>
+                {rate === null ? '기록 없음' : `${rate}%`}
+                <span style={{ fontSize: '11px', color: '#c9c5d0', marginLeft: '6px' }}>{note}</span>
+              </span>
+            </div>
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${rate ?? 0}%`, background: color, borderRadius: '4px' }}></div></div>
+          </div>
+        );
+
+        // 요약 레포트: 동그란 글머리 + 항목 사이 여유
+        const summaryLines: any[] = !hasRecentData
+          ? ['아직 최근 3개월 루틴 기록이 없어요. 루틴을 만들고 체크해보세요.']
+          : [
+              worstDays.length > 0
+                ? <>최근 3개월 간 트래커님은 <b style={{ color: MUTED_PURPLE }}>{worstDays.map(d => d.label).join(', ')}요일</b>에 가장 달성률이 저조했어요.</>
+                : '아직 요일별로 비교할 기록이 부족해요.',
+              mom.kind === 'none' ? '지난 달 기록이 없어 비교할 수 없어요.'
+                : mom.kind === 'same' ? '지난 달과 달성률이 같아요.'
+                : mom.kind === 'fromZero' ? <>지난 달 달성률이 0%라 증감률은 계산할 수 없지만, 이번 달은 <b>{mom.now}%</b>를 달성했어요.</>
+                : <>지난 달 대비 달성률은 <b style={{ color: mom.kind === 'up' ? '#3f9a5a' : '#d0605e' }}>{mom.pct}% {mom.kind === 'up' ? '증가' : '감소'}</b>했어요.</>,
+              worstRoutineCats.length > 0
+                ? <>최근 3개월 간 <b style={{ color: MUTED_PURPLE }}>{worstRoutineCats.map(c => c.name).join(', ')}</b> 카테고리의 달성률이 가장 낮았어요.</>
+                : '카테고리별로 비교할 기록이 부족해요.',
+            ];
 
         return (
           <>
             <div className="header-row"><Menu size={22} className="cursor-pointer" color="#4e4b52" onClick={onOpenMenu} /><h3 className="header-title">통계</h3><Bell size={22} color="#4e4b52" onClick={onOpenNoti} /></div>
-            <div className="filter-tabs" style={{ padding: '0 20px', marginBottom: '8px' }}>
-              <button className={`chip ${statsPeriod === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
-              <button className={`chip ${statsPeriod === 'month' ? 'active' : ''}`} onClick={() => setStatsPeriod('month')}>월간</button>
-              <button className={`chip ${statsPeriod === 'year' ? 'active' : ''}`} onClick={() => setStatsPeriod('year')}>연간</button>
-            </div>
             <div className="scroll-content">
-              <div style={{ fontSize: '14px', fontWeight: '700', marginLeft: '4px' }}>달성 추이</div>
-              
-              <div style={{ height: '180px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '20px 12px 10px', background: '#fff', border: '1px solid #f1f0f5', borderRadius: '18px', marginTop: '12px' }}>
-                {chartData.map((item: any, idx: number) => {
-                  const barWidth = statsPeriod === 'year' ? '12px' : statsPeriod === 'month' ? '30px' : '20px';
-                  const isHighlighted = item.rate === maxRateValue && maxRateValue > 0;
-                  return (
-                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '8px' }}>
-                      <div style={{ height: `${item.rate * 1.2}px`, width: barWidth, background: isHighlighted ? '#6c63ff' : '#e9e7ff', borderRadius: '6px', transition: '0.3s' }}></div>
-                      <span style={{ fontSize: '10px', color: '#7a7680', fontWeight: '500' }}>{item.label}</span>
-                    </div>
-                  );
-                })}
+              <div style={{ fontSize: '12.5px', color: '#7a7680', lineHeight: 1.7, textAlign: 'left', marginBottom: '24px', fontWeight: '500' }}>
+                올해의 <b style={{ color: '#6c63ff' }}>루틴 달성률</b>과 <b style={{ color: '#5b678c' }}>목표 달성률</b>을 보여드려요.
               </div>
 
-              <div style={{ fontSize: '14px', fontWeight: '700', marginTop: '28px', marginLeft: '4px' }}>실패 원인 분석</div>
-              <div style={{ background: '#fff', padding: '20px', borderRadius: '18px', border: '1px solid #f1f0f5', marginTop: '12px' }}>
-                {dynamicFailData.map((f: any, idx: number) => (
-                  <div key={idx} style={{ fontSize: '13px', marginTop: idx === 0 ? '0' : '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontWeight: '600', color: '#4e4b52' }}>
-                      <span>{f.name}</span>
-                      <span>{f.rate}%</span>
+              {/* ===================== 루틴 ===================== */}
+              <div style={{ background: '#fbfbff', border: '1px solid #efedfa', borderRadius: '20px', padding: '18px 16px', marginBottom: '28px' }}>
+                {sectionTitle(<Repeat size={16} color="#6c63ff" />, '루틴', `${thisYear}년`, '#6c63ff')}
+
+                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', marginLeft: '2px' }}>기간별 루틴 달성률</div>
+                <div className="filter-tabs" style={{ padding: 0, margin: '10px 0 6px', gap: '8px' }}>
+                  <button className={`chip ${period === 'day' ? 'active' : ''}`} onClick={() => setStatsPeriod('day')}>일간</button>
+                  <button className={`chip ${period === 'week' ? 'active' : ''}`} onClick={() => setStatsPeriod('week')}>주간</button>
+                  <button className={`chip ${period === 'month' ? 'active' : ''}`} onClick={() => setStatsPeriod('month')}>월간</button>
+                </div>
+                {/* 그래프 제목의 0.7배, 얇게 */}
+                <div style={{ fontSize: '9px', fontWeight: '500', color: '#8e8a96', textAlign: 'left', marginLeft: '2px' }}>{periodDesc}</div>
+
+                <div style={{ height: '170px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '20px 8px 10px', background: '#fff', border: '1px solid #f1f0f5', borderRadius: '16px', marginTop: '10px' }}>
+                  {chartData.map((item, idx) => {
+                    const isTop = item.rate !== null && item.rate === maxRateValue && maxRateValue > 0;
+                    return (
+                      <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '6px', minWidth: 0 }}>
+                        <span style={{ fontSize: '8px', color: '#b5b1bc', fontWeight: '600', minHeight: '10px' }}>{item.rate === null ? '' : `${item.rate}%`}</span>
+                        <div title={item.rate === null ? '기록 없음' : `${item.rate}%`}
+                             style={{ height: `${(item.rate ?? 0) * 1.0}px`, width: period === 'month' ? '12px' : '20px', background: isTop ? '#6c63ff' : '#e9e7ff', borderRadius: '5px', transition: '0.3s' }}></div>
+                        <span style={{ fontSize: '9px', color: '#a9a5b0', fontWeight: '600', whiteSpace: 'nowrap' }}>{item.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '26px 0 10px 2px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '700' }}>카테고리별 루틴 달성률</span>
+                  <span style={{ fontSize: '10px', fontWeight: '600', color: '#a9a5b0' }}>최근 3개월</span>
+                </div>
+                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
+                  {routineCats.length === 0
+                    ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>아직 기록이 없어요.</div>
+                    : routineCats.map(c => barRow(c.name, c.rate, `${c.done}/${c.expected}`, '#6c63ff'))}
+                </div>
+
+                {/* 요약 레포트 (최근 3개월) */}
+                <div className="stats-summary">
+                  {summaryLines.map((l, i) => (
+                    <div key={i} className="stats-summary-item">
+                      <span className="stats-summary-dot" />
+                      <span>{l}</span>
                     </div>
-                    <div className="progress-bar"><div className="progress-fill" style={{ width: `${f.rate}%`, background: f.color, borderRadius: '4px' }}></div></div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+
+              {/* ===================== 목표 ===================== */}
+              <div style={{ background: '#fbfcff', border: '1px solid #e9edf6', borderRadius: '20px', padding: '18px 16px', marginBottom: '20px' }}>
+                {sectionTitle(<Flag size={16} color="#5b678c" />, '목표', `${thisYear}년`, '#5b678c')}
+
+                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', marginLeft: '2px' }}>카테고리별 목표 달성률</div>
+                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5', marginTop: '10px' }}>
+                  {goalCats.length === 0
+                    ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>올해 등록한 목표가 없어요.</div>
+                    : goalCats.map(c => barRow(c.name, c.rate, c.done > 0 ? `성공 ${c.success}/완료 ${c.done}` : `진행중 ${c.total}`, '#5b678c'))}
+                </div>
+
+                <div style={{ fontSize: '13px', fontWeight: '700', textAlign: 'left', margin: '26px 0 10px 2px' }}>실패 원인 분석</div>
+                <div style={{ background: '#fff', padding: '18px 18px 4px', borderRadius: '16px', border: '1px solid #f1f0f5' }}>
+                  {failedGoals.length === 0
+                    ? <div style={{ fontSize: '13px', color: '#b5b1bc', paddingBottom: '16px' }}>올해 실패로 기록된 목표가 없어요.</div>
+                    : dynamicFailData.map(f => barRow(f.name, f.rate, '', '#ff8a8a'))}
+                </div>
+              </div>
+
+              <div style={{ height: '40px' }} />
             </div>
           </>
         );
+      }
     }
   };
 
@@ -1345,6 +1580,9 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   // 알림 설정 화면에서 뒤로가기를 눌렀을 때 돌아갈 곳
   const [notiSettingsBack, setNotiSettingsBack] = useState<string>('main');
+  // 통계용 데이터 (최근 3개월 루틴 기록 + 내 루틴 전체)
+  const [statsRecords, setStatsRecords] = useState<any[]>([]);
+  const [allRoutines, setAllRoutines] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<{name: string, email: string}>({ name: '사용자', email: '이메일 없음' });
 
   const [notiFilter, setNotiFilter] = useState<string>('all');
@@ -1735,7 +1973,32 @@ const fetchServerNotifications = async () => {
   } catch (e) { console.error('서버 알림 로딩 실패', e); }
 };
 
-const handleReadNotification = async (n: any) => {
+// 통계 화면에서 쓸 데이터(올해 + 최근 3개월)를 한 번에 받아온다
+  const fetchStatsData = async () => {
+    if (!localStorage.getItem('token')) return;
+    const end = new Date();
+    const start = statsRanges(end).fetchStart;
+    try {
+      const [recRes, routRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/records/range?start=${toDateStr(start)}&end=${toDateStr(end)}`, { headers: authHeaders() }),
+        fetch(`${BASE_URL}/api/routines`, { headers: authHeaders() }),
+      ]);
+      if (recRes.ok) {
+        const d = await recRes.json();
+        if (Array.isArray(d)) setStatsRecords(d);
+      } else {
+        console.error('루틴 기록 조회 실패', recRes.status);
+      }
+      if (routRes.ok) {
+        const d = await routRes.json();
+        if (Array.isArray(d)) setAllRoutines(d);
+      }
+    } catch (e) {
+      console.error('통계 데이터 로딩 실패', e);
+    }
+  };
+
+  const handleReadNotification = async (n: any) => {
   setNotifications((prev: any[]) => prev.map((item: any) => item.id === n.id ? { ...item, unread: false } : item));
   if (n.serverId && n.unread) {
     try { await fetch(`${BASE_URL}/api/notifications/${n.serverId}/read`, { method: 'PATCH', headers: authHeaders() }); }
@@ -1764,12 +2027,17 @@ useEffect(() => {
 
   useEffect(() => {
     if (view === 'main') {
-      fetchUserProfile(); 
+      fetchUserProfile();
       fetchBackendRoutines();
       fetchTodos();
       fetchGoals();
     }
   }, [view, globalDate]);
+
+  // 통계 탭을 열 때만 불러온다
+  useEffect(() => {
+    if (view === 'main' && activeTab === 'stats') fetchStatsData();
+  }, [view, activeTab]);
 
   
 const [todoFilter, setTodoFilter] = useState<string>('all');
@@ -1816,6 +2084,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
             onOpenNoti={() => setView('noti')} 
             onOpenMenu={() => setIsSidebarOpen(true)}
             onEditTodo={handleEditTodo} onEditRoutine={handleEditRoutine} onEditGoal={handleEditGoal} 
+            statsRecords={statsRecords} allRoutines={allRoutines}
           />
           
           {isSidebarOpen && (

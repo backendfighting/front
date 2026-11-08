@@ -178,7 +178,7 @@ input, select, textarea {
 }
 .item-meta + .item-meta { margin-left: 8px; }
 .item-title {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
 }
@@ -327,3 +327,29 @@ input, select, textarea {
 
 .cursor-pointer { cursor: pointer; }
 .text-link { color: #6c63ff; font-weight: 700; cursor: pointer; }
+/* 통계 요약 레포트 (동그란 글머리, 항목 사이 여유) */
+.stats-summary {
+  background: #f7f6ff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-top: 14px;
+  text-align: left;
+}
+.stats-summary-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #6b6575;
+  line-height: 1.7;
+}
+.stats-summary-item + .stats-summary-item { margin-top: 8px; }
+.stats-summary-dot {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: #b9b2d6;
+}
