@@ -48,7 +48,8 @@ body {
 
 h1,
 h2 {
-  font-family: var(--heading);
+  /* 제목도 다른 글씨와 같은 글꼴(Pretendard) */
+  font-family: inherit;
   font-weight: 500;
   color: var(--text-h);
 }

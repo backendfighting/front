@@ -8,16 +8,20 @@
   --p1: #f9f8ff;
   /* 1보라와 2보라 사이: 루틴 심볼 사각형, 작게 칠하는 선택·마우스 올림 표시 */
   --p15: #e6e4fc;
+  /* 6보라: 5보라보다 한 단계 진한 색 (달력 달성률 점의 가장 높은 단계) */
+  --p6: #5244c3;
   /* 남색: 목표와 알림 설정 전용 */
   --navy3: #444f70;
   --navy: #5b678c;
   --navy2: #c5cbe0;
+  --navy18: #8f97b2; /* 진한 남색~연한 남색을 같은 간격으로 나눴을 때 1.8 단계: 카테고리별 목표의 '그 외' 막대 */
   --navy1: #eef1f8;
   /* 의미 색: 빨강·주황·초록 하나씩 (+ 연한 배경) */
   --red: #e8787c;
   --red1: #fdeeee;
   --orange: #eba44c;
   --orange2: #f4cc99;
+  --orange15: #f8dcb8; /* 2주황보다 흐린 주황: 카테고리별 루틴의 가장 낮은 막대 */
   --orange1: #fdf3e6;
   --green: #5aaf78;
   /* 회색 글씨 4단계: 제목 / 본문 / 보조 / 흐림 */
@@ -335,8 +339,8 @@ input, select, textarea {
 
 /* 회원가입 약관 레이아웃 */
 .agreement-box {
-  background: #ffffff;
-  border: 1px solid var(--line);
+  background: var(--p1);
+  border: none;
   border-radius: 14px;
   padding: 16px;
   margin-top: 20px;
@@ -354,9 +358,11 @@ input, select, textarea {
 }
 .agreement-item:last-child { margin-bottom: 0; }
 .agreement-item input[type="checkbox"] {
-  width: auto;
+  width: 16px;
+  height: 16px;
   margin: 0;
   cursor: pointer;
+  accent-color: var(--p5); /* 체크박스를 5보라로 */
 }
 
 /* 플로팅 버튼 */
@@ -661,3 +667,12 @@ select {
 /* 목표 결과 기록: 실패 사유 버튼 한 줄에 3개씩 */
 .fail-reason-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .fail-reason-grid .chip { padding: 8px 4px; font-size: 13px; text-align: center; }
+
+/* 알림 삭제 x 버튼 (각 알림 오른쪽 위) */
+.noti-delete {
+  position: absolute; top: 12px; right: 12px;
+  width: 28px; height: 28px; padding: 0; border: none; border-radius: 8px;
+  background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.noti-delete:hover { background: var(--surface); }

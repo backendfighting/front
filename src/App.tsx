@@ -190,15 +190,19 @@ function RegisterView({ setView }: any) {
         <div style={{ width: 24 }} />
       </div>
       <div className="scroll-content" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 230px)', paddingBottom: '20px' }}>
-        <div style={{ textAlign: 'left', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0', color: 'var(--g4)' }}>새로운 시작을 함께해요</h2>
-          <p style={{ fontSize: '13px', color: 'var(--g2)' }}>간단한 정보를 입력하고 서비스를 시작하세요.</p>
+        {/* 로그인 화면과 같은 결: 깃발 아이콘 + 가운데 제목 */}
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <div style={{ backgroundColor: 'var(--p15)', width: '52px', height: '52px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '4px auto 12px' }}>
+            <Flag size={24} color={C.p5} fill={C.p5} />
+          </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 8px', color: 'var(--g4)' }}>반갑습니다, <span style={{ color: 'var(--p5)' }}>트래커님!</span></h2>
+          <p style={{ fontSize: '13px', color: 'var(--g2)', wordBreak: 'keep-all' }}>간단한 정보를 입력하고 목표를 시작해 보세요.</p>
         </div>
+        <div className="input-group"><label>닉네임</label><input type="text" placeholder="닉네임을 입력하세요" value={nickname} onChange={(e)=>setNickname(e.target.value)} /></div>
         <div className="input-group"><label>이메일</label><input type="email" placeholder="example@email.com" value={email} onChange={(e)=>setEmail(e.target.value)} /></div>
         <div className="input-group"><label>비밀번호</label><input type="password" placeholder="비밀번호를 입력하세요" value={password} onChange={(e)=>setPassword(e.target.value)} /></div>
         <div className="input-group"><label>비밀번호 확인</label><input type="password" placeholder="비밀번호를 다시 입력하세요" value={passwordCheck} onChange={(e)=>setPasswordCheck(e.target.value)} /></div>
-        <div className="input-group"><label>닉네임</label><input type="text" placeholder="닉네임을 입력하세요" value={nickname} onChange={(e)=>setNickname(e.target.value)} /></div>
-        
+
         <div className="agreement-box">
           <div className="agreement-item" style={{ borderBottom: '1px solid var(--surface)', paddingBottom: '10px', marginBottom: '8px' }}>
             <input type="checkbox" id="all-agree" checked={allChecked} onChange={(e) => setAgreements({ terms: e.target.checked, privacy: e.target.checked, marketing: e.target.checked })} />
@@ -225,7 +229,7 @@ function ErrorView({ setView }: { setView: SetView }) {
   );
 }
 
-function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, onOpenSettings, onDemo }: any) {
+function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, onDelete, onOpenSettings, onDemo }: any) {
 
 
   const filteredNoti = (notifications || []).filter((n: any) => notiFilter === 'unread' ? n.unread : true);
@@ -242,9 +246,8 @@ function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, o
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', marginBottom: '24px' }}>
         <div className="filter-tabs" style={{ padding: 0, marginBottom: 0, gap: '8px' }}>
           <button className={`chip ${notiFilter === 'all' ? 'active' : ''}`} style={notiFilter !== 'all' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--ctl)', color: 'white' }} onClick={() => setNotiFilter('all')}>전체</button>
-          <button className={`chip ${notiFilter === 'unread' ? 'active' : ''}`} style={notiFilter !== 'unread' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--ctl)', color: 'white' }} onClick={() => setNotiFilter('unread')}>읽지 않음</button>
+          <button className={`chip ${notiFilter === 'unread' ? 'active' : ''}`} style={notiFilter !== 'unread' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--ctl)', color: 'white' }} onClick={() => setNotiFilter('unread')}>읽지 않음{unreadCount > 0 ? ` ${unreadCount}` : ''}</button>
         </div>
-        <span style={{ fontSize: '13px', color: 'var(--g1)', fontWeight: '500' }}>새 알림: {unreadCount}</span>
       </div>
 
       <div className="scroll-content">
@@ -270,10 +273,16 @@ function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, o
                  alignItems: 'flex-start',
                  boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
                  cursor: 'pointer',
-                 opacity: n.unread ? 1 : 0.6
+                 opacity: n.unread ? 1 : 0.6,
+                 position: 'relative'
                }}
                onClick={() => onRead(n)}
           >
+            {/* 알림 삭제: 오른쪽 위 x (읽지 않음 글씨와 같은 회색) */}
+            <button className="noti-delete" aria-label="알림 삭제" title="알림 삭제"
+                    onClick={(e) => { e.stopPropagation(); onDelete(n); }}>
+              <X size={16} strokeWidth={2.4} color={C.g2} />
+            </button>
             <div style={{
               width: 44, height: 44,
               background: String(n.type).startsWith('goal') ? 'var(--red1)' : 'var(--p15)',
@@ -282,7 +291,7 @@ function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, o
             }}>
               {n.icon}
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingRight: '18px' }}>
               <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--g4)', marginBottom: '6px' }}>{n.title}</div>
               <div style={{ fontSize: '13px', color: 'var(--g2)', marginBottom: '12px', lineHeight: '1.4' }}>{n.desc}</div>
               <div style={{ fontSize: '12px', color: 'var(--g1)', fontWeight: '500' }}>{n.time}</div>
@@ -761,12 +770,12 @@ const FAIL_REASONS = ['⏱️ 시간 부족', '🎯 동기 부족', '🔋 체력
 // 목표 추가 화면 위 문구 (화면을 열 때마다 하나를 고름)
 const GOAL_ADD_BANNERS = [
   '새로운 도전을 시작해 보세요!',
-  '트래커님의 다음 이야기를 시작해 보세요!',
+  '다음 이야기를 시작해 보세요!',
   '좋아하는 것들로 나만의 목표를 채워보세요!',
-  '상상만으로 설레는 일이 있다면 목표로 만들어 봐요!',
+  '상상만으로 설레는 일이 있다면\n목표로 만들어 봐요!',
   '미래의 나를 위한 목표를 만들어 봐요!',
   '마음속에 담아둔 계획을 꺼내 볼 시간이에요.',
-  '목표는 상상에서 시작되고, 실천으로 완성돼요.',
+  '목표는 상상에서 시작되고,\n실천으로 완성돼요.',
   '가능성은 목표를 세우는 순간부터 시작돼요.',
 ];
 
@@ -777,6 +786,20 @@ const plainReason = (r: string) => r.replace(/^[^\s가-힣]+\s*/, '');
 const barColorsByRank = (rates: (number | null)[], top: string, rest: string) => {
   const max = Math.max(0, ...rates.map(r => r ?? 0));
   return rates.map(r => (max > 0 && r === max ? top : rest));
+};
+
+// 가장 높은 값(동점 포함) / 가장 낮은 값(동점 포함) / 그 외를 다른 색으로
+// 기록이 없는 항목(null)은 비교에서 빼고 '그 외' 색. 모두 같은 값이면 전부 최고 색
+const barColorsTopLow = (rates: (number | null)[], top: string, rest: string, low: string) => {
+  const vals = rates.filter((r): r is number => r !== null && r !== undefined);
+  if (vals.length === 0) return rates.map(() => rest);
+  const max = Math.max(...vals), min = Math.min(...vals);
+  return rates.map(r => {
+    if (r === null || r === undefined) return rest;
+    if (max > 0 && r === max) return top;
+    if (r === min && min < max) return low;
+    return rest;
+  });
 };
 
 // ===== 통계 계산 =====
@@ -1331,7 +1354,8 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
         <span className="text-link" onClick={handleSave}>저장</span>
       </div>
       <div className="scroll-content">
-        <div style={{ background: 'var(--navy1)', color: 'var(--navy)', padding: '24px', borderRadius: '16px', textAlign: 'center', fontWeight: 'bold', marginBottom: '20px', wordBreak: 'keep-all' }}>
+        {/* 좁은 폰에서도 한 줄 문구가 한 줄에 들어가도록 좌우 여백을 줄이고 글자 크기를 화면 너비에 맞춤 (최대 16px) */}
+        <div style={{ background: 'var(--navy1)', color: 'var(--navy)', padding: '24px 12px', borderRadius: '16px', textAlign: 'center', fontWeight: 'bold', fontSize: 'clamp(13px, 3.7vw, 16px)', marginBottom: '20px', wordBreak: 'keep-all', whiteSpace: 'pre-line', lineHeight: 1.5 }}>
           {isEdit ? '목표를 수정해보세요!' : banner}
         </div>
 
@@ -1462,7 +1486,8 @@ function MainAppView({
     }
     return out;
   })();
-  const rateDotColor = (r: number) => (r < 25 ? 'var(--p2)' : r < 50 ? 'var(--p3)' : r < 75 ? 'var(--p4)' : 'var(--p5)');
+  // 달성률 색: 40% 미만 2보라, 40~70% 미만 4보라, 70% 이상 6보라 (달력 점과 아래 달성률 숫자에 같이 씀)
+  const rateDotColor = (r: number) => (r < 40 ? 'var(--p2)' : r < 70 ? 'var(--p4)' : 'var(--p6)');
 
   // 중요도 순서: 높음 > 보통 > 낮음
   const PRIORITY_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
@@ -1806,7 +1831,7 @@ function MainAppView({
                         {isToday && (
                           <span style={{ fontSize: '8px', fontWeight: '700', color: dayNum === selectedCalendarDay ? '#fff' : 'var(--p5)' }}>오늘</span>
                         )}
-                        {/* 그 날의 달성률 점: 25% 미만 2보라, 25~50% 3보라, 50~75% 4보라, 75% 이상 5보라 */}
+                        {/* 그 날의 달성률 점: 40% 미만 2보라, 40~70% 미만 4보라, 70% 이상 6보라 */}
                         {!isToday && dayRate !== undefined && (
                           <span className="cal-dot" style={{ background: isSel ? '#ffffff' : rateDotColor(dayRate) }} />
                         )}
@@ -1816,7 +1841,7 @@ function MainAppView({
                 </div>
                 <div className="cal-legend">
                   <span>달성률 0%</span>
-                  {['var(--p2)', 'var(--p3)', 'var(--p4)', 'var(--p5)'].map(c => <i key={c} style={{ background: c }} />)}
+                  {['var(--p2)', 'var(--p4)', 'var(--p6)'].map(c => <i key={c} style={{ background: c }} />)}
                   <span>100%</span>
                 </div>
               </div>
@@ -1824,7 +1849,7 @@ function MainAppView({
                 {calMonth}월 {selectedCalendarDay}일 미션
               </div>
               <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '500', color: 'var(--g3)' }}>
-                종합 미션 달성률 <b style={{ color: 'var(--p5)' }}>{missionProgress().rate}%</b>
+                종합 미션 달성률 <b style={{ color: rateDotColor(missionProgress().rate) }}>{missionProgress().rate}%</b>
               </div>
               {/* 날짜를 한 번 누르면 그 날의 미션을 간략하게 보여주고, 이 칸을 누르거나 날짜를 더블클릭하면 그 날의 미션 페이지가 열린다 */}
               {renderCompactDayList()}
@@ -2027,7 +2052,8 @@ function MainAppView({
             chartData.push({ label: `${y}년`, rate: rangeRate(daily, new Date(y, 0, 1), to), year: y } as any);
           });
         }
-        const maxRateValue = Math.max(0, ...chartData.map(c => c.rate ?? 0));
+        // 기간별 루틴 막대: 최고 5보라 / 그 외 3보라 / 최저 1.5보라
+        const chartColors = barColorsTopLow(chartData.map(c => c.rate), 'var(--p5)', 'var(--p3)', 'var(--p15)');
 
         // --- 요약: 올해는 최근 3개월, 지난 연도는 그 해 1년 ---
         const weekdayStats = buildWeekdayStats(daily, summaryFrom, yearEnd);
@@ -2078,8 +2104,10 @@ function MainAppView({
         const failMessage = causeMsgs.length ? causeMsgs[Math.floor(failMsgSeed[1] * causeMsgs.length) % causeMsgs.length] : '';
 
         // 막대 색
-        const routineCatColors = barColorsByRank(routineCats.map(c => c.rate), 'var(--red)', 'var(--orange2)');
-        const goalCatColors = barColorsByRank(goalCats.map(c => c.rate), 'var(--navy)', 'var(--navy2)');
+        // 카테고리별 루틴: 최고 빨강 / 그 외 주황(목표의 '진행중' 글씨색) / 최저 흐린 주황
+        const routineCatColors = barColorsTopLow(routineCats.map(c => c.rate), 'var(--red)', 'var(--orange)', 'var(--orange15)');
+        // 카테고리별 목표: 최고 진한 남색 / 그 외 중간 남색 / 최저 연한 남색 (세 색의 밝기 간격을 같게)
+        const goalCatColors = barColorsTopLow(goalCats.map(c => c.rate), 'var(--navy3)', 'var(--navy18)', 'var(--navy2)');
         const failColors = barColorsByRank(dynamicFailData.map(f => f.rate), 'var(--red)', 'var(--orange2)');
 
         // 저채도·중명도 보라 (요약에서 강조할 때)
@@ -2154,7 +2182,6 @@ function MainAppView({
 
                 <div style={{ height: '170px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '20px 8px 10px', background: '#fff', border: '1px solid var(--surface)', borderRadius: '16px', marginTop: '10px' }}>
                   {chartData.map((item, idx) => {
-                    const isTop = item.rate !== null && item.rate === maxRateValue && maxRateValue > 0;
                     // 연간 그래프: 막대(연도)를 누르면 그 해 기록을 본다
                     const isYearBar = period === 'year' && item.year !== undefined;
                     const isViewing = isYearBar && item.year === viewYear;
@@ -2164,7 +2191,7 @@ function MainAppView({
                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '6px', minWidth: 0 }}>
                         <span style={{ fontSize: '8px', color: 'var(--g1)', fontWeight: '600', minHeight: '10px' }}>{item.rate === null ? '' : `${item.rate}%`}</span>
                         <div title={item.rate === null ? '기록 없음' : `${item.rate}%`}
-                             style={{ height: `${(item.rate ?? 0) * 1.0}px`, width: period === 'month' ? '12px' : '20px', background: isTop ? 'var(--p5)' : 'var(--p2)', borderRadius: '5px', transition: '0.3s' }}></div>
+                             style={{ height: `${(item.rate ?? 0) * 1.0}px`, width: period === 'month' ? '12px' : '20px', background: chartColors[idx], borderRadius: '5px', transition: '0.3s' }}></div>
                         <span style={{ fontSize: '9px', color: isViewing ? 'var(--p5)' : 'var(--g1)', fontWeight: isViewing ? '800' : '600', whiteSpace: 'nowrap' }}>{item.label}</span>
                       </div>
                     );
@@ -2833,7 +2860,17 @@ const fetchServerNotifications = async () => {
     ]);
   };
 
-  const handleReadNotification = async (n: any) => {
+  // 알림 삭제: 목록에서 바로 지우고, 서버 알림이면 서버에서도 지운다 (실패하면 다시 불러옴)
+const handleDeleteNotification = async (n: any) => {
+  setNotifications((prev: any[]) => prev.filter((item: any) => item.id !== n.id));
+  if (!n.serverId) return;
+  try {
+    const res = await fetch(`${BASE_URL}/api/notifications/${n.serverId}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) { alert(`알림 삭제에 실패했습니다.\n${await readError(res)}`); fetchServerNotifications(); }
+  } catch { alert('서버와 통신할 수 없습니다.'); fetchServerNotifications(); }
+};
+
+const handleReadNotification = async (n: any) => {
   setNotifications((prev: any[]) => prev.map((item: any) => item.id === n.id ? { ...item, unread: false } : item));
   if (n.serverId && n.unread) {
     try { await fetch(`${BASE_URL}/api/notifications/${n.serverId}/read`, { method: 'PATCH', headers: authHeaders() }); }
@@ -2890,6 +2927,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
           notiFilter={notiFilter} 
           setNotiFilter={setNotiFilter} 
           onRead={handleReadNotification}
+          onDelete={handleDeleteNotification}
           onOpenSettings={() => { setNotiSettingsBack('noti'); setView('noti-settings'); }}
           onDemo={sendDemoNotification}
         />
