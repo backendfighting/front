@@ -353,3 +353,52 @@ input, select, textarea {
   border-radius: 50%;
   background: #b9b2d6;
 }
+
+/* 입력란 아래 작은 안내 */
+.field-hint {
+  font-size: 11px;
+  color: #a9a5b0;
+  margin: 6px 4px 0;
+}
+
+/* 알림 설정: 오늘의 미션 알림 */
+.noti-section {
+  background: #fff;
+  border: 1px solid #f1f0f5;
+  border-radius: 16px;
+  padding: 16px;
+  text-align: left;
+}
+.noti-section-title { font-size: 14px; font-weight: 700; color: #1a191b; }
+.noti-section-desc { font-size: 11px; font-weight: 500; color: #b5b1bc; margin-top: 4px; }
+.time-remove-btn {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  border: none; border-radius: 10px;
+  background: #f5f4f8; color: #8e8a96;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.add-time-btn {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 14px; padding: 0;
+  border: none; background: none;
+  font-size: 13px; font-weight: 700; color: #586589;
+  cursor: pointer;
+}
+.add-time-icon {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  border: 1.5px solid #c9c5e6;
+  background: #f7f6ff; color: #6c63ff;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 시·분 선택칸: 좁은 곳에서도 '8시', '00분'이 잘리지 않게 안쪽 여백을 줄임 */
+.time-select {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  padding: 12px 4px 12px 10px;
+  font-size: 13px;
+}

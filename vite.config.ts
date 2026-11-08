@@ -27,6 +27,8 @@ export default defineConfig({
       },
       workbox: {
         navigateFallbackDenylist: [/^\/api/],
+        // 알림을 눌렀을 때 오늘의 미션 화면을 여는 코드
+        importScripts: ['sw-notification.js'],
       },
       devOptions: { enabled: true },
     }),

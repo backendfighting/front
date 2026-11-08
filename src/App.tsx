@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import {
   Mail, Lock, Eye, ChevronLeft, Flag, Bell,
   CheckCircle2, Circle,
@@ -23,13 +23,18 @@ const getNotified = (): string[] => {
   try { return JSON.parse(localStorage.getItem('notifiedIds') || '[]'); } catch { return []; }
 };
 
-const showDeviceNotification = async (title: string, body: string) => {
+// 컴퓨터/폰 알림 띄우기. 누르면 open 에 적힌 화면(오늘의 미션 등)이 열린다
+// (클릭 처리는 public/sw-notification.js 와 App 의 메시지 수신부에서 함)
+const showDeviceNotification = async (title: string, body: string, open: string = 'todo') => {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
-    if (reg) { reg.showNotification(title, { body, icon: '/pwa-192x192.png' }); return; }
+    if (reg) { await reg.showNotification(title, { body, icon: '/pwa-192x192.png', data: { open } }); return; }
   } catch { /* 아래로 이동 */ }
-  new Notification(title, { body, icon: '/pwa-192x192.png' });
+  try {
+    const n = new Notification(title, { body, icon: '/pwa-192x192.png' });
+    n.onclick = () => { window.focus(); n.close(); window.dispatchEvent(new CustomEvent('open-tab', { detail: open })); };
+  } catch { /* 이 환경에서는 알림을 띄울 수 없음 */ }
 };
 
 
@@ -295,14 +300,22 @@ const formatNotiTime = (iso: string) => {
   const mm = String(d.getMinutes()).padStart(2, '0');
   return d.toDateString() === new Date().toDateString() ? `오늘 ${hh}:${mm}` : `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
 };
+// 서버 알림 종류별 제목 (TODO/ROUTINE/MISSION 은 새 방식, 나머지는 예전 알림)
+const SERVER_NOTI_META: Record<string, { title: string; icon: string }> = {
+  TODO: { title: '오늘의 할일', icon: '📌' },
+  ROUTINE: { title: '매일 루틴', icon: '🔄' },
+  MISSION: { title: '오늘의 미션', icon: '📋' },
+  DEADLINE: { title: '마감 임박', icon: '⏰' },
+  DAILY_SUMMARY: { title: '오늘의 할 일', icon: '📋' },
+};
 const toServerNoti = (n: any) => {
-  const isDeadline = n.type === 'DEADLINE';
+  const meta = SERVER_NOTI_META[n.type] || { title: '알림', icon: '🔔' };
   return {
     id: `server-${n.notificationId}`,
     serverId: n.notificationId,
-    type: isDeadline ? 'deadline' : 'summary',
-    icon: isDeadline ? '⏰' : '📋',
-    title: isDeadline ? '마감 임박' : '오늘의 할 일',
+    type: String(n.type || '').toLowerCase(),
+    icon: meta.icon,
+    title: meta.title,
     desc: n.message,
     time: formatNotiTime(n.createdAt),
     unread: !n.read,
@@ -407,6 +420,10 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
   };
   useEffect(() => { load(); }, []);
 
+  // 삭제한 루틴(종료일이 오늘 이전)은 목록에서 숨긴다
+  const today = getTodayStr();
+  const visibleRoutines = routines.filter((r: any) => !r.endDate || String(r.endDate).slice(0, 10) > today);
+
   const dayText = (days: string[]) => {
     const d = sortDays(days || []);
     if (d.length === 7) return '매일';
@@ -435,12 +452,20 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
         <p style={{ fontSize: '12px', color: '#b5b1bc', margin: '0 4px 16px' }}>일시중지한 루틴은 할 일 화면에 나타나지 않아요.</p>
         {loading && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>불러오는 중...</p>}
         {!loading && failed && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>루틴 목록을 불러오지 못했습니다.</p>}
-        {!loading && !failed && routines.length === 0 && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>등록된 루틴이 없습니다.</p>}
-        {!loading && !failed && routines.map((r: any) => (
+        {!loading && !failed && visibleRoutines.length === 0 && <p style={{ color: '#b5b1bc', textAlign: 'center', fontSize: '13px', padding: '40px 0' }}>등록된 루틴이 없습니다.</p>}
+        {!loading && !failed && visibleRoutines.map((r: any) => (
           <div key={r.routineId} style={{ background: '#fff', border: '1px solid #f1f0f5', borderRadius: '20px', padding: '18px 20px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px', opacity: r.active ? 1 : 0.55 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '15px', fontWeight: '700', color: '#1a191b', marginBottom: '6px' }}>{r.title}</div>
-              <div style={{ fontSize: '12px', color: '#7a7680' }}>🔁 {dayText(r.repeatDays)}{r.active ? '' : '  ·  일시중지됨'}</div>
+              <div style={{ fontSize: '12px', color: '#7a7680' }}>
+                🔁 {dayText(r.repeatDays)}
+                {r.routineTime ? `  ·  🕒 ${String(r.routineTime).slice(0, 5)}` : ''}
+                {r.notifyBefore !== null && r.notifyBefore !== undefined ? '  ·  🔔' : ''}
+                {r.active ? '' : '  ·  일시중지됨'}
+              </div>
+              {r.startDate && String(r.startDate).slice(0, 10) > today && (
+                <div style={{ fontSize: '11px', color: '#a9a5b0', marginTop: '4px' }}>{String(r.startDate).slice(0, 10)}부터 시작</div>
+              )}
             </div>
             <div role="switch" aria-checked={!!r.active} aria-label={`${r.title} ${r.active ? '일시중지' : '다시 시작'}`}
                  onClick={() => toggleActive(r)} className="cursor-pointer"
@@ -449,8 +474,8 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
             </div>
             <Pencil size={18} color="#b5b1bc" className="cursor-pointer" onClick={() => onEditRoutine(r)} />
             <Trash2 size={18} color="#ff4d4d" className="cursor-pointer" onClick={async () => {
-              if (!confirm('이 루틴을 삭제하시겠습니까?')) return;
-              await onDeleteRoutine(r.routineId);
+              if (!confirm('이 루틴을 삭제할까요?\n\n오늘부터 달력에서 사라지고, 지난 기록은 통계에 남아요.\n(오늘 이미 완료했다면 내일부터 사라져요)')) return;
+              await onDeleteRoutine(r.routineId, today);
               load();
             }} />
           </div>
@@ -462,6 +487,20 @@ function RoutineManageView({ setView, onEditRoutine, onDeleteRoutine }: any) {
 
 function NotiSettingsView({ setView, backTo = 'main' }: any) {
   const [perm, setPerm] = useState<string>(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
+  // '오늘의 미션' 알림 시간들
+  const [times, setTimes] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/api/users/me`, { headers: authHeaders() });
+        const d = res.ok ? await res.json() : null;
+        setTimes(Array.isArray(d?.missionAlarmTimes) ? d.missionAlarmTimes : ['08:00']);
+      } catch { setTimes(['08:00']); }
+      finally { setLoaded(true); }
+    })();
+  }, []);
 
   const requestPerm = async () => {
     if (typeof Notification === 'undefined') return alert('이 브라우저는 알림을 지원하지 않아요.');
@@ -472,12 +511,29 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
     setPerm(result);
   };
 
+  const addTime = () => {
+    const next = ['21:00', '12:00', '18:00', '07:00', '09:00'].find(t => !times.includes(t)) || '09:00';
+    setTimes(prev => [...prev, next]);
+  };
+
+  const save = async () => {
+    const cleaned = Array.from(new Set(times)).sort();
+    try {
+      const res = await fetch(`${BASE_URL}/api/users/me/alarm-times`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify({ times: cleaned }),
+      });
+      if (!res.ok) return alert(`저장에 실패했습니다.\n${await readError(res)}`);
+      setTimes(cleaned);
+      alert('알림 설정이 저장되었습니다.');
+    } catch { alert('서버와 통신할 수 없습니다.'); }
+  };
+
   return (
     <div className="card">
       <div className="header-row">
         <ChevronLeft onClick={() => setView(backTo)} className="cursor-pointer" color="#4e4b52" />
         <h3 className="header-title">알림 설정</h3>
-        <div style={{ width: 24 }} />
+        <span className="text-link" onClick={save}>저장</span>
       </div>
       <div className="scroll-content">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '16px', border: '1px solid #f1f0f5', borderRadius: '16px', marginBottom: '16px' }}>
@@ -492,12 +548,32 @@ function NotiSettingsView({ setView, backTo = 'main' }: any) {
           )}
         </div>
 
-        <div style={{ background: '#f5f4ff', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: '#6c63ff', marginBottom: '6px' }}>준비 중</div>
-          <div style={{ fontSize: '13px', color: '#7a7680', lineHeight: 1.6 }}>
-            할 일·루틴별 알림 시점 설정은<br />목표 기능 정리 후 추가할 예정이에요.
-          </div>
+        <div className="noti-section">
+          <div className="noti-section-title">오늘의 미션 알림</div>
+          <div className="noti-section-desc">오늘 해야 할 미션의 개수를 알려드려요</div>
+
+          {loaded && times.map((t, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+              <TimeSelect value={t} onChange={(v) => setTimes(prev => prev.map((x, j) => (j === i ? v : x)))} />
+              <button className="time-remove-btn" aria-label="이 시간 삭제" onClick={() => setTimes(prev => prev.filter((_, j) => j !== i))}>
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+          {loaded && times.length === 0 && (
+            <p className="field-hint" style={{ marginTop: '10px' }}>알림 시간이 없으면 오늘의 미션 알림이 오지 않아요.</p>
+          )}
+
+          <button className="add-time-btn" onClick={addTime}>
+            <span className="add-time-icon"><Plus size={16} /></span>
+            시간 추가
+          </button>
         </div>
+
+        <p className="field-hint" style={{ margin: '14px 4px 0', lineHeight: 1.6 }}>
+          할 일·루틴 알림은 추가하거나 수정할 때 '알림 설정'에서 정할 수 있어요.<br />
+          알림은 이 앱이 열려 있을 때 화면에 떠요.
+        </p>
       </div>
     </div>
   );
@@ -659,6 +735,49 @@ const isRealDate = (s: string) => {
   return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
 };
 
+// 오전/오후 버튼 + 시·분 선택 (값은 "HH:MM" 24시간)
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const safe = isRealTime(value) ? value : '09:00';
+  const h24 = Number(safe.slice(0, 2));
+  const min = safe.slice(3, 5);
+  const mer: 'AM' | 'PM' = h24 < 12 ? 'AM' : 'PM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const minuteOptions = BASE_MINUTES.includes(min) ? BASE_MINUTES : [...BASE_MINUTES, min].sort();
+  const set = (m: 'AM' | 'PM', h: number, mm: string) =>
+    onChange(`${String((h % 12) + (m === 'PM' ? 12 : 0)).padStart(2, '0')}:${mm}`);
+  return (
+    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flex: 1, minWidth: 0 }}>
+      <button className={`chip ${mer === 'AM' ? 'active' : ''}`} style={{ padding: '10px 12px', flexShrink: 0 }} onClick={() => set('AM', h12, min)}>오전</button>
+      <button className={`chip ${mer === 'PM' ? 'active' : ''}`} style={{ padding: '10px 12px', flexShrink: 0 }} onClick={() => set('PM', h12, min)}>오후</button>
+      <select className="time-select" value={h12} onChange={(e) => set(mer, Number(e.target.value), min)}>
+        {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}시</option>)}
+      </select>
+      <select className="time-select" value={min} onChange={(e) => set(mer, h12, e.target.value)}>
+        {minuteOptions.map(m => <option key={m} value={m}>{m}분</option>)}
+      </select>
+    </div>
+  );
+}
+
+// 알림 시점 선택지 (값 = 몇 분 전 / none = 알림 없음 / custom = 직접 입력)
+const ALARM_OPTIONS = [
+  { v: 'none', l: '알림 없음' }, { v: '0', l: '일정 시작 시간' }, { v: '10', l: '10분 전' },
+  { v: '30', l: '30분 전' }, { v: '60', l: '1시간 전' }, { v: 'custom', l: '직접 설정' },
+];
+const alarmFromMinutes = (n: any) =>
+  n === null || n === undefined ? 'none' : ['0', '10', '30', '60'].includes(String(n)) ? String(n) : 'custom';
+const toServerPriority = (p: string) => (p === 'normal' ? 'MEDIUM' : String(p || 'normal').toUpperCase());
+
+// 켜고 끄는 스위치
+function Toggle({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
+  return (
+    <div role="switch" aria-checked={on} aria-label={label} onClick={onClick} className="cursor-pointer"
+         style={{ width: 44, height: 26, borderRadius: 13, background: on ? '#586589' : '#d9d7e0', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+      <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: on ? 21 : 3, transition: 'left 0.2s' }} />
+    </div>
+  );
+}
+
 const isRealTime = (s: string) => {
   if (!/^\d{2}:\d{2}$/.test(s || '')) return false;
   const [h, m] = s.split(':').map(Number);
@@ -672,7 +791,8 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
   const [title, setTitle] = useState(editingItem?.title || '');
   const [memo, setMemo] = useState(editingItem?.description || '');
   const [date, setDate] = useState(editingItem?.todoDate || globalDate);
-  const [time, setTime] = useState(editingItem?.todoTime ? String(editingItem.todoTime).slice(0, 5) : '14:00');
+  const initialTime = editingItem?.todoTime || editingItem?.routineTime;
+  const [time, setTime] = useState(initialTime ? String(initialTime).slice(0, 5) : '14:00');
   // 기본값은 '보통'
   const [priority, setPriority] = useState(
     editingItem?.priority === 'HIGH' ? 'high' : editingItem?.priority === 'LOW' ? 'low' : 'normal'
@@ -682,34 +802,87 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
   const [repeatDays, setRepeatDays] = useState<string[]>(
     Array.isArray(editingItem?.repeatDays) ? sortDays(editingItem.repeatDays) : []
   );
+  // 루틴 전용: 시작일(새 루틴은 지금 보고 있는 날짜), 시간 지정 여부
+  const [startDate, setStartDate] = useState<string>(
+    isRoutineEdit ? (editingItem?.startDate ? String(editingItem.startDate).slice(0, 10) : '') : globalDate
+  );
+  const [useTime, setUseTime] = useState<boolean>(isRoutineEdit ? !!editingItem?.routineTime : false);
+  // 알림
+  const [alarm, setAlarm] = useState<string>(alarmFromMinutes(editingItem?.notifyBefore));
+  const [customMin, setCustomMin] = useState<string>(
+    alarmFromMinutes(editingItem?.notifyBefore) === 'custom' ? String(editingItem.notifyBefore) : '15'
+  );
+
   const isRoutine = isRoutineEdit || (!isEdit && type === 'routine');
+  const timeOn = !isRoutine || useTime; // 할 일은 항상 시간이 있다
   const toggleDay = (d: string) =>
     setRepeatDays(prev => sortDays(prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]));
-
-  // 오전/오후 + 시 + 분 조합 (내부 값은 "HH:MM" 24시간)
-  const safeTime = isRealTime(time) ? time : '14:00';
-  const hour24 = Number(safeTime.slice(0, 2));
-  const minutePart = safeTime.slice(3, 5);
-  const meridiem: 'AM' | 'PM' = hour24 < 12 ? 'AM' : 'PM';
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  const minuteOptions = BASE_MINUTES.includes(minutePart) ? BASE_MINUTES : [...BASE_MINUTES, minutePart].sort();
-  const setTimeParts = (m: 'AM' | 'PM', h12: number, min: string) => {
-    const h = (h12 % 12) + (m === 'PM' ? 12 : 0);
-    setTime(`${String(h).padStart(2, '0')}:${min}`);
-  };
 
   const handleSave = () => {
     if (!title.trim()) return alert('제목을 입력하세요.');
     if (isRoutine && repeatDays.length === 0) return alert('반복할 요일을 하나 이상 선택하세요.');
-    if (!isRoutine) {
-      if (!isRealDate(date)) return alert('날짜를 다시 확인해주세요. 달력에 없는 날짜입니다.');
-      if (!isRealTime(time)) return alert('시간을 다시 확인해주세요. 존재하지 않는 시간입니다.');
+    if (!isRoutine && !isRealDate(date)) return alert('날짜를 다시 확인해주세요. 달력에 없는 날짜입니다.');
+    if (isRoutine && startDate && !isRealDate(startDate)) return alert('시작일을 다시 확인해주세요. 달력에 없는 날짜입니다.');
+    if (timeOn && !isRealTime(time)) return alert('시간을 다시 확인해주세요. 존재하지 않는 시간입니다.');
+
+    let notifyBefore: number | null = null;
+    if (timeOn && alarm !== 'none') {
+      notifyBefore = alarm === 'custom' ? Number(customMin) : Number(alarm);
+      if (alarm === 'custom' && (!Number.isInteger(notifyBefore) || notifyBefore < 1 || notifyBefore > 1440)) {
+        return alert('알림은 1분 전부터 1440분(하루) 전까지 설정할 수 있어요.');
+      }
+      // 알림을 켰는데 브라우저 알림 권한을 아직 안 정했다면 이때 물어본다
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
     }
-    if (isRoutineEdit) onUpdateRoutine(editingItem, title, memo, repeatDays, category);
-    else if (isEdit) onUpdateTodo(editingItem.todoId || editingItem.id, title, memo, date, time, priority);
-    else onAddTodo(title, memo, date, time, priority, type, repeatDays, category);
+
+    const extra = isRoutine
+      ? { startDate: startDate || null, routineTime: useTime ? time : null, notifyBefore }
+      : { notifyBefore };
+
+    if (isRoutineEdit) onUpdateRoutine(editingItem, title, memo, repeatDays, category, priority, extra);
+    else if (isEdit) onUpdateTodo(editingItem.todoId || editingItem.id, title, memo, date, time, priority, extra);
+    else onAddTodo(title, memo, date, time, priority, type, repeatDays, category, extra);
     setView('main');
   };
+
+  const alarmSection = (
+    <div className="input-group">
+      <label>🔔 알림 설정</label>
+      {!timeOn ? (
+        <p className="field-hint">시간을 정하면 알림을 받을 수 있어요.</p>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+            {ALARM_OPTIONS.map(o => (
+              <button key={o.v} className={`chip ${alarm === o.v ? 'active' : ''}`} onClick={() => setAlarm(o.v)}>{o.l}</button>
+            ))}
+          </div>
+          {alarm === 'custom' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+              <input type="number" min={1} max={1440} value={customMin} aria-label="몇 분 전에 알림"
+                     onChange={(e) => setCustomMin(e.target.value)} style={{ width: '96px', marginTop: 0 }} />
+              <span style={{ fontSize: '13px', color: '#4e4b52', fontWeight: 600 }}>분 전</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  const prioritySection = (
+    <div className="input-group">
+      <label>⭐ 중요도</label>
+      <div className="filter-tabs" style={{ marginTop: '6px' }}>
+        {['high', 'normal', 'low'].map(p => (
+          <button key={p} className={`chip ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
+            {p === 'high' ? '높음' : p === 'normal' ? '보통' : '낮음'}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="card">
@@ -733,58 +906,59 @@ function TodoAddView({ setView, onAddTodo, onUpdateTodo, onUpdateRoutine, editin
           <input placeholder="메모 (선택)" value={memo} onChange={(e) => setMemo(e.target.value)} />
         </div>
         {isRoutine ? (
-          <div className="input-group">
-            <label>🔁 반복 요일</label>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {DAY_OPTIONS.map(d => (
-                <button key={d.v} className={`chip ${repeatDays.includes(d.v) ? 'active' : ''}`} onClick={() => toggleDay(d.v)}
-                  style={{ flex: 1, minWidth: 0, padding: '8px 0', textAlign: 'center' }}>
-                  {d.l}
-                </button>
-              ))}
+          <>
+            <div className="input-group">
+              <label>🔁 반복 요일</label>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                {DAY_OPTIONS.map(d => (
+                  <button key={d.v} className={`chip ${repeatDays.includes(d.v) ? 'active' : ''}`} onClick={() => toggleDay(d.v)}
+                    style={{ flex: 1, minWidth: 0, padding: '8px 0', textAlign: 'center' }}>
+                    {d.l}
+                  </button>
+                ))}
+              </div>
+              <div className="filter-tabs" style={{ marginTop: '8px' }}>
+                <button className="chip" onClick={() => setRepeatDays(ALL_DAYS)}>매일</button>
+                <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(0, 5))}>평일</button>
+                <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(5))}>주말</button>
+              </div>
             </div>
-            <div className="filter-tabs" style={{ marginTop: '8px' }}>
-              <button className="chip" onClick={() => setRepeatDays(ALL_DAYS)}>매일</button>
-              <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(0, 5))}>평일</button>
-              <button className="chip" onClick={() => setRepeatDays(ALL_DAYS.slice(5))}>주말</button>
+
+            <div className="input-group">
+              <label>📅 시작일</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <p className="field-hint">{startDate ? '이 날부터 달력에 보여요.' : '비워두면 처음부터 있던 루틴으로 계산돼요.'}</p>
             </div>
-            <label style={{ marginTop: '20px' }}>카테고리</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {categoryOptions(editingItem?.category).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
+
+            <div className="input-group">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label>🕒 시간 지정</label>
+                <Toggle on={useTime} onClick={() => setUseTime(v => !v)} label="루틴 시간 지정" />
+              </div>
+              {useTime && <div style={{ marginTop: '10px' }}><TimeSelect value={time} onChange={setTime} /></div>}
+            </div>
+
+            {alarmSection}
+            {prioritySection}
+
+            <div className="input-group">
+              <label>카테고리</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                {categoryOptions(editingItem?.category).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </>
         ) : (
           <>
             <div className="input-group"><label>📅 날짜 지정</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
 
             <div className="input-group">
               <label>🕒 시간 지정</label>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <button className={`chip ${meridiem === 'AM' ? 'active' : ''}`} style={{ padding: '10px 14px' }}
-                        onClick={() => setTimeParts('AM', hour12, minutePart)}>오전</button>
-                <button className={`chip ${meridiem === 'PM' ? 'active' : ''}`} style={{ padding: '10px 14px' }}
-                        onClick={() => setTimeParts('PM', hour12, minutePart)}>오후</button>
-                <select value={hour12} style={{ flex: 1, minWidth: 0 }}
-                        onChange={(e) => setTimeParts(meridiem, Number(e.target.value), minutePart)}>
-                  {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}시</option>)}
-                </select>
-                <select value={minutePart} style={{ flex: 1, minWidth: 0 }}
-                        onChange={(e) => setTimeParts(meridiem, hour12, e.target.value)}>
-                  {minuteOptions.map(m => <option key={m} value={m}>{m}분</option>)}
-                </select>
-              </div>
+              <div style={{ marginTop: '6px' }}><TimeSelect value={time} onChange={setTime} /></div>
             </div>
 
-            <div className="input-group">
-              <label>⭐ 중요도</label>
-              <div className="filter-tabs">
-                {['high', 'normal', 'low'].map(p => (
-                  <button key={p} className={`chip ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)}>
-                    {p === 'high' ? '높음' : p === 'normal' ? '보통' : '낮음'}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {alarmSection}
+            {prioritySection}
           </>
         )}
       </div>
@@ -928,8 +1102,9 @@ function MainAppView({
     } else {
       // 시간 순 (시간이 없는 항목은 뒤로)
       copy.sort((a, b) => {
-        const ta = a.todoTime ? String(a.todoTime).slice(0, 5) : '99:99';
-        const tb = b.todoTime ? String(b.todoTime).slice(0, 5) : '99:99';
+        const at = a.todoTime || a.routineTime, bt = b.todoTime || b.routineTime;
+        const ta = at ? String(at).slice(0, 5) : '99:99';
+        const tb = bt ? String(bt).slice(0, 5) : '99:99';
         return ta.localeCompare(tb);
       });
     }
@@ -1026,9 +1201,9 @@ function MainAppView({
                 <Circle size={22} color="#e5e4e7" style={{ marginRight: 12, flexShrink: 0 }} />
               }
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
-                {(r.todoTime || pText || r.category) && (
+                {(r.routineTime || pText || r.category) && (
                   <div style={{ display: 'flex', alignItems: 'center' }}>
-                    {r.todoTime && <span className="item-meta">{String(r.todoTime).slice(0, 5)}</span>}
+                    {r.routineTime && <span className="item-meta">{String(r.routineTime).slice(0, 5)}</span>}
                     {r.category && <span className="item-meta">{r.category}</span>}
                     {pText && <span className={`priority-badge ${pClass}`}>{pText}</span>}
                   </div>
@@ -1039,7 +1214,7 @@ function MainAppView({
             <Pencil size={18} className="cursor-pointer" color="#b5b1bc" style={{ marginRight: 12 }} onClick={(e) => { e.stopPropagation(); onEditRoutine(r); }} />
             <Trash2 size={18} className="cursor-pointer" color="#b5b1bc" onClick={(e) => {
               e.stopPropagation();
-              if (confirm('이 루틴을 삭제하시겠습니까?')) onDeleteRoutine(id);
+              if (confirm(`이 루틴을 삭제할까요?\n\n${calMonth}/${selectedCalendarDay}부터 달력에서 사라지고, 지난 기록은 통계에 남아요.\n(이 날 이미 완료했다면 다음 날부터 사라져요)`)) onDeleteRoutine(id);
             }} />
           </div>
         );
@@ -1580,6 +1755,8 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   // 알림 설정 화면에서 뒤로가기를 눌렀을 때 돌아갈 곳
   const [notiSettingsBack, setNotiSettingsBack] = useState<string>('main');
+  // 이미 확인한 서버 알림 id (처음 불러올 때는 null)
+  const serverSeenRef = useRef<Set<string> | null>(null);
   // 통계용 데이터 (최근 3개월 루틴 기록 + 내 루틴 전체)
   const [statsRecords, setStatsRecords] = useState<any[]>([]);
   const [allRoutines, setAllRoutines] = useState<any[]>([]);
@@ -1709,37 +1886,46 @@ function App() {
     } catch (e) { console.error(e); }
   };
 
-  const handleDeleteRoutine = async (routineId: number) => {
-    const token = localStorage.getItem('token');
+  // date: 이 날짜부터 달력에서 사라짐 (그 날 이미 완료했으면 다음 날부터). 기본은 지금 보고 있는 날짜
+  const handleDeleteRoutine = async (routineId: number, date?: string) => {
     try {
-      const response = await fetch(`${BASE_URL}/api/routines/${routineId}`, { method: 'DELETE', headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
+      const base = date || globalDate || getTodayStr();
+      const response = await fetch(`${BASE_URL}/api/routines/${routineId}?date=${base}`, { method: 'DELETE', headers: authHeaders() });
       if (response.ok) {
         fetchBackendRoutines();
       } else {
-        alert('루틴 삭제에 실패했습니다.');
+        alert(`루틴 삭제에 실패했습니다.\n\n${await readError(response)}`);
       }
     } catch (error) {
       console.error(error);
     }
   };
 
-  const handleAddTodo = async (title: string, memo: string, date: string, time: string, priority: string, type: string, repeatDays: string[] = [], category: string = '기타') => {
-    const token = localStorage.getItem('token');
+  const handleAddTodo = async (title: string, memo: string, date: string, time: string, priority: string, type: string, repeatDays: string[] = [], category: string = '기타', extra: any = {}) => {
     try {
       if (type === 'routine') {
-        const payload = { title, description: memo, category, repeatDays: repeatDays.length ? sortDays(repeatDays) : ALL_DAYS };
-        const response = await fetch(`${BASE_URL}/api/routines`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify(payload)
-        });
-        if (response.ok) fetchBackendRoutines(); 
+        const payload = {
+          title, description: memo, category,
+          repeatDays: repeatDays.length ? sortDays(repeatDays) : ALL_DAYS,
+          startDate: extra.startDate || null,
+          routineTime: extra.routineTime ? `${extra.routineTime}:00` : null,
+          priority: toServerPriority(priority),
+          notifyBefore: extra.notifyBefore ?? null,
+        };
+        const response = await fetch(`${BASE_URL}/api/routines`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+        if (response.ok) fetchBackendRoutines();
+        else alert(`루틴 추가에 실패했습니다.\n\n${await readError(response)}`);
       } else {
-        const todoPayload = { title, description: memo, todoDate: date, todoTime: time + ":00", priority: priority === 'normal' ? 'MEDIUM' : priority.toUpperCase() };
-        const response = await fetch(`${BASE_URL}/api/todos`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' }, body: JSON.stringify(todoPayload)
-        });
+        const todoPayload = {
+          title, description: memo, todoDate: date, todoTime: time + ':00',
+          priority: toServerPriority(priority),
+          notifyBefore: extra.notifyBefore ?? null,
+        };
+        const response = await fetch(`${BASE_URL}/api/todos`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(todoPayload) });
         if (response.ok) fetchTodos();
+        else alert(`할 일 추가에 실패했습니다.\n\n${await readError(response)}`);
       }
-    } catch (error) { console.error(error); }
+    } catch (error) { console.error(error); alert('서버와 통신할 수 없습니다.'); }
   };
 
   const handleDeleteTodo = async (id: number) => {
@@ -1806,27 +1992,37 @@ function App() {
   const handleEditRoutine = (r: any) => { setEditingItem(r); setEditingKind('routine'); setView('todo-add'); };
   const handleEditGoal = (g: any) => { setEditingGoal(g); setView('goal-add'); };
 
-  const handleUpdateTodo = async (id: number, title: string, memo: string, date: string, time: string, priority: string) => {
-    const token = localStorage.getItem('token');
+  const handleUpdateTodo = async (id: number, title: string, memo: string, date: string, time: string, priority: string, extra: any = {}) => {
     try {
       const response = await fetch(`${BASE_URL}/api/todos/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ title, description: memo, todoDate: date, todoTime: time.length === 5 ? time + ':00' : time, priority: priority === 'normal' ? 'MEDIUM' : priority.toUpperCase() })
+        headers: authHeaders(),
+        body: JSON.stringify({
+          title, description: memo, todoDate: date, todoTime: time.length === 5 ? time + ':00' : time,
+          priority: toServerPriority(priority),
+          notifyBefore: extra.notifyBefore ?? null,
+        })
       });
       if (response.ok) fetchTodos();
       else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
     } catch { alert('서버와 통신할 수 없습니다.'); }
   };
 
-  const handleUpdateRoutine = async (r: any, title: string, memo: string, repeatDays: string[] = [], category?: string) => {
-    const token = localStorage.getItem('token');
+  const handleUpdateRoutine = async (r: any, title: string, memo: string, repeatDays: string[] = [], category?: string, priority?: string, extra: any = {}) => {
     const id = r.routineId || r.id;
     try {
+      // 시작일·시간·알림은 서버가 보낸 값 그대로 덮어쓰므로 항상 같이 보낸다
       const response = await fetch(`${BASE_URL}/api/routines/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ title, description: memo, category: category || r.category || '기타', repeatDays: repeatDays.length ? sortDays(repeatDays) : (r.repeatDays || ALL_DAYS) })
+        headers: authHeaders(),
+        body: JSON.stringify({
+          title, description: memo, category: category || r.category || '기타',
+          repeatDays: repeatDays.length ? sortDays(repeatDays) : (r.repeatDays || ALL_DAYS),
+          priority: priority ? toServerPriority(priority) : (r.priority || 'MEDIUM'),
+          startDate: 'startDate' in extra ? extra.startDate : (r.startDate || null),
+          routineTime: 'routineTime' in extra ? (extra.routineTime ? `${extra.routineTime}:00` : null) : (r.routineTime || null),
+          notifyBefore: 'notifyBefore' in extra ? extra.notifyBefore : (r.notifyBefore ?? null),
+        })
       });
       if (response.ok) fetchBackendRoutines();
       else alert(`수정에 실패했습니다. (오류 코드 ${response.status})`);
@@ -1898,31 +2094,8 @@ function App() {
   const items: any[] = [];
 
   try {
-    // 1) 오늘 할 일: 마감 30분 전 ~ 마감 후 1시간까지
-    const todoRes = await fetch(`${BASE_URL}/api/todos?date=${today}`, { headers });
-    if (todoRes.ok) {
-      const data = await todoRes.json();
-      if (Array.isArray(data)) {
-        data.forEach((t: any) => {
-          const done = t.isCompleted === true || t.completed === true || t.done === true;
-          if (done || !t.todoTime) return;
-          const [h, m] = String(t.todoTime).split(':').map(Number);
-          const due = new Date();
-          due.setHours(h, m, 0, 0);
-          const diffMin = Math.round((due.getTime() - now.getTime()) / 60000);
-          const id = t.todoId || t.id;
-          if (diffMin >= 0 && diffMin <= 30) {
-            items.push({ id: `todo-soon-${id}-${today}`, type: 'todo', icon: '⏰', unread: true, time: timeLabel,
-              title: '할 일 마감 임박', desc: `"${t.title}" 마감이 ${diffMin}분 남았습니다` });
-          } else if (diffMin < 0 && diffMin >= -60) {
-            items.push({ id: `todo-late-${id}-${today}`, type: 'todo', icon: '📊', unread: true, time: timeLabel,
-              title: '마감 시간이 지났어요', desc: `"${t.title}"을(를) 아직 완료하지 않았어요` });
-          }
-        });
-      }
-    }
-
-    // 2) 목표: 오늘이 마감일이거나 마감일이 지난 진행중 목표
+    // 할 일·루틴 알림은 알림을 켠 것만 서버에서 보내므로 여기서는 목표만 확인한다
+    // 목표: 오늘이 마감일이거나 마감일이 지난 진행중 목표
     const goalRes = await fetch(`${BASE_URL}/api/goals`, { headers });
     if (goalRes.ok) {
       const data = await goalRes.json();
@@ -1953,12 +2126,40 @@ function App() {
   // 컴퓨터 알림 팝업 (한 번 보낸 건 다시 안 보냄)
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     const notified = getNotified();
-    items.filter(i => !notified.includes(i.id)).forEach(i => showDeviceNotification(i.title, i.desc));
+    items.filter(i => !notified.includes(i.id)).forEach(i => showDeviceNotification(i.title, i.desc, 'goal'));
     localStorage.setItem('notifiedIds', JSON.stringify([...new Set([...notified, ...items.map(i => i.id)])].slice(-100)));
   }
 };
 
 const isLoggedInView = view !== 'login' && view !== 'register' && view !== 'error';
+
+// 알림을 누르면 해당 화면(기본: 오늘의 미션)으로 이동
+const openFromNotification = (tab: string) => {
+  if (!localStorage.getItem('token')) return;
+  const target = TABS.includes(tab) ? tab : 'todo';
+  setIsSidebarOpen(false);
+  if (target === 'todo') setGlobalDate(getTodayStr());
+  setActiveTab(target);
+  setView('main');
+};
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const open = params.get('open');
+  if (open) {
+    openFromNotification(open);
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+  const onSwMessage = (e: MessageEvent) => {
+    if (e.data && e.data.type === 'open-tab') openFromNotification(e.data.tab);
+  };
+  const onPageNoti = (e: Event) => openFromNotification((e as CustomEvent).detail);
+  navigator.serviceWorker?.addEventListener('message', onSwMessage);
+  window.addEventListener('open-tab', onPageNoti);
+  return () => {
+    navigator.serviceWorker?.removeEventListener('message', onSwMessage);
+    window.removeEventListener('open-tab', onPageNoti);
+  };
+}, []);
 
 // 서버에서 만든 알림 (매일 아침 할 일 요약, 마감 1시간 전) 불러오기
 const fetchServerNotifications = async () => {
@@ -1970,6 +2171,21 @@ const fetchServerNotifications = async () => {
     if (!Array.isArray(data)) return;
     const server = data.map(toServerNoti);
     setNotifications((prev: any[]) => [...prev.filter((n: any) => !n.serverId), ...server]);
+
+    // 처음 불러온 알림은 이미 지난 것이므로 띄우지 않고, 그 뒤에 새로 생긴 것만 기기 알림으로 띄운다
+    const seen = serverSeenRef.current;
+    if (seen === null) {
+      serverSeenRef.current = new Set(server.map((n: any) => n.id));
+      return;
+    }
+    const fresh = server.filter((n: any) => n.unread && !seen.has(n.id));
+    fresh.forEach((n: any) => seen.add(n.id));
+    const notified = getNotified();
+    const toShow = fresh.filter((n: any) => !notified.includes(n.id));
+    toShow.forEach((n: any) => showDeviceNotification(n.title, n.desc, 'todo'));
+    if (toShow.length) {
+      localStorage.setItem('notifiedIds', JSON.stringify([...new Set([...notified, ...toShow.map((n: any) => n.id)])].slice(-100)));
+    }
   } catch (e) { console.error('서버 알림 로딩 실패', e); }
 };
 
@@ -2009,7 +2225,7 @@ const fetchServerNotifications = async () => {
 useEffect(() => {
   if (!isLoggedInView) return;
   fetchServerNotifications();
-  const timer = setInterval(fetchServerNotifications, 60000);
+  const timer = setInterval(fetchServerNotifications, 30000);
   return () => clearInterval(timer);
 }, [isLoggedInView, view]);
 useEffect(() => {
