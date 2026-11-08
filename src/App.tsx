@@ -31,16 +31,19 @@ const NAVY_SCOPE = { '--ctl': 'var(--navy)', '--ctl-soft': 'var(--navy1)', '--ct
 // 아이콘처럼 실제 색값이 필요한 곳에서만 쓴다. 나머지는 'var(--p5)' 같은 CSS 변수를 쓴다
 const C = {
   p5: '#6a60de',
-  p4: '#8981e7',
-  p3: '#aaa4ef',
-  p2: '#f3f2fe',
-  p1: '#eae9fc',
+  p4: '#8b83e9',
+  p3: '#aea8f2',
+  p2: '#d3d0f9',
+  p1: '#f9f8ff',
+  p15: '#e6e4fc',
+  navy3: '#444f70',
   navy: '#5b678c',
   navy2: '#c5cbe0',
   navy1: '#eef1f8',
   red: '#e8787c',
   red1: '#fdeeee',
   orange: '#eba44c',
+  orange2: '#f4cc99',
   orange1: '#fdf3e6',
   green: '#5aaf78',
   g4: '#2e2c33',
@@ -101,7 +104,7 @@ function LoginView({ setView }: { setView: SetView }) {
 
   return (
     <div className="card">
-      <div style={{ backgroundColor: 'var(--p1)', width: '52px', height: '52px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '48px auto 16px' }}>
+      <div style={{ backgroundColor: 'var(--p15)', width: '52px', height: '52px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '48px auto 16px' }}>
         <Flag size={24} color={C.p5} fill={C.p5} />
       </div>
       <h2 style={{ fontSize: '26px', fontWeight: 800, marginBottom: '40px', color: 'var(--g4)' }}>Goal Tracker</h2>
@@ -273,7 +276,7 @@ function NotiView({ setView, notifications, notiFilter, setNotiFilter, onRead, o
           >
             <div style={{
               width: 44, height: 44,
-              background: String(n.type).startsWith('goal') ? 'var(--red1)' : 'var(--p1)',
+              background: String(n.type).startsWith('goal') ? 'var(--red1)' : 'var(--p15)',
               borderRadius: 14, marginRight: 16, display: 'flex',
               justifyContent: 'center', alignItems: 'center', fontSize: '20px', flexShrink: 0
             }}>
@@ -703,7 +706,6 @@ const FAIL_REASON_MESSAGES: Record<string, string[]> = {
 const plainReason = (r: string) => r.replace(/^[^\s가-힣]+\s*/, '');
 
 // 가로 막대 색: 가장 높은 값(동점 포함)만 진한 색, 나머지는 다른 색
-const AMBER = 'var(--orange)';
 const barColorsByRank = (rates: (number | null)[], top: string, rest: string) => {
   const max = Math.max(0, ...rates.map(r => r ?? 0));
   return rates.map(r => (max > 0 && r === max ? top : rest));
@@ -1256,12 +1258,12 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
       </div>
       <div className="scroll-content">
         <div style={{ background: 'var(--navy1)', color: 'var(--navy)', padding: '24px', borderRadius: '16px', textAlign: 'center', fontWeight: 'bold', marginBottom: '20px' }}>
-          {isEdit ? '목표를 수정해보세요' : '새로운 도전을 시작해보세요'}
+          {isEdit ? '목표를 수정해보세요!' : '새로운 도전을 시작해보세요!'}
         </div>
 
         <div className="input-group">
           <label>목표 제목</label>
-          <input placeholder="예: 매일 30분 조깅하기" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input placeholder="예 : SQLD 자격증 취득" value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
 
         <div className="input-group">
@@ -1272,9 +1274,9 @@ function GoalAddView({ setView, onAddGoal, onUpdateGoal, editingGoal, globalDate
         </div>
 
         <div className="input-group">
-          <label>목표 내용 / 설명</label>
+          <label>메모</label>
           <textarea
-            placeholder="목표에 대한 상세한 내용을 적어주세요..."
+            placeholder="목표에 대한 설명이나 다짐을 적어보세요"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
             style={{ width: '100%', padding: '12px', border: '1px solid var(--line)', borderRadius: '12px', minHeight: '80px', resize: 'none' }}
@@ -1313,7 +1315,7 @@ function MainAppView({
   globalDate, setGlobalDate,
   onOpenNoti, onOpenMenu,
   onEditTodo, onEditRoutine, onEditGoal,
-  statsRecords = [], allRoutines = []
+  statsRecords = [], allRoutines = [], calMonthData = null
 }: any) {
   
   const [failReasons, setFailReasons] = useState<string[]>([]);
@@ -1358,6 +1360,34 @@ function MainAppView({
   const firstDayIndex = new Date(calYear, calMonth - 1, 1).getDay();
 
   const isItemDone = (t: any) => t.isCompleted === true || t.completed === true || t.done === true;
+
+  // 달력: 그 달의 날짜별 달성률 (할 일 + 그 날 해야 했던 루틴, 오늘까지만)
+  const calRates: Record<string, number> = (() => {
+    const out: Record<string, number> = {};
+    const d0 = calMonthData || {};
+    if (!d0.key) return out;
+    const todayKey = getTodayStr();
+    const doneByDate = groupDoneRecords(d0.records || []);
+    const todosByDate: Record<string, any[]> = {};
+    (d0.todos || []).forEach((t: any) => { const k = String(t.todoDate).slice(0, 10); (todosByDate[k] = todosByDate[k] || []).push(t); });
+    const [yy, mm] = String(d0.key).split('-').map(Number);
+    const last = new Date(yy, mm, 0).getDate();
+    for (let i = 1; i <= last; i++) {
+      const dt = new Date(yy, mm - 1, i);
+      const k = toDateStr(dt);
+      if (k > todayKey) break;
+      const dow = DOW_KEYS[dt.getDay()];
+      const expected = new Set<any>((d0.routines || []).filter((r: any) => isScheduledOn(r, k, dow)).map((r: any) => r.routineId));
+      const done = new Set<any>((doneByDate[k] || []).map((r: any) => r.routineId));
+      done.forEach(id => expected.add(id));
+      const dayTodos = todosByDate[k] || [];
+      const total = expected.size + dayTodos.length;
+      if (total === 0) continue;
+      out[k] = Math.round(((done.size + dayTodos.filter((t: any) => isItemDone(t)).length) / total) * 100);
+    }
+    return out;
+  })();
+  const rateDotColor = (r: number) => (r < 25 ? 'var(--p2)' : r < 50 ? 'var(--p3)' : r < 75 ? 'var(--p4)' : 'var(--p5)');
 
   // 중요도 순서: 높음 > 보통 > 낮음
   const PRIORITY_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
@@ -1481,7 +1511,7 @@ function MainAppView({
         <span style={{ marginRight: '6px' }}>🔄</span> 반복 루틴 ({routineList.length}개)
       </div>
       {routineList.length === 0 ? (
-        <div style={{ fontSize: '13px', color: 'var(--g1)', textAlign: 'center', padding: '24px 0', borderRadius: '16px', border: '1px dashed var(--p1)' }}>
+        <div style={{ fontSize: '13px', color: 'var(--g1)', textAlign: 'center', padding: '24px 0', borderRadius: '16px', border: '1px dashed var(--p15)' }}>
           {doneMode ? '완료된 루틴이 없습니다.' : undoneMode ? '남은 루틴이 없습니다.' : '루틴 기록이 비어있습니다.'}
         </div>
       ) : routineList.map((r: any) => {
@@ -1529,7 +1559,7 @@ function MainAppView({
 
   // 전체/완료 필터 + 시간 순·중요도 순 정렬
   const renderFilterBar = () => (
-    <div className="filter-tabs" style={{ marginBottom: '24px', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="filter-tabs" style={{ marginBottom: '16px', justifyContent: 'space-between', alignItems: 'center' }}>
       <div style={{ display: 'flex', gap: '8px' }}>
         <button className={`chip ${todoFilter === 'all' ? 'active' : ''}`} onClick={() => setTodoFilter('all')}>전체</button>
         <button className={`chip ${todoFilter === 'undone' ? 'active' : ''}`} onClick={() => setTodoFilter('undone')}>미완료</button>
@@ -1554,13 +1584,36 @@ function MainAppView({
     return { total, remain: total - done, rate: total > 0 ? Math.round((done / total) * 100) : 0 };
   };
 
+  // 다음 미션: 지금 고른 정렬(시간순·중요도순)대로 보이는 목록에서 안 끝낸 것 중 맨 위 (일반 할 일 -> 반복 루틴)
+  const nextMission = () => {
+    const t = sortItems(todos || []).find((x: any) => !isItemDone(x));
+    if (t) return { title: t.title, time: t.todoTime ? String(t.todoTime).slice(0, 5) : '' };
+    const r = sortItems(backendRoutines || []).find((x: any) => x.isCompleted !== true);
+    if (r) return { title: r.title, time: r.routineTime ? String(r.routineTime).slice(0, 5) : '' };
+    return null;
+  };
+
   const renderProgressCard = (label: string) => {
     const p = missionProgress();
+    const todoDone = (todos || []).filter((t: any) => isItemDone(t)).length;
+    const routineDone = (backendRoutines || []).filter((r: any) => r.isCompleted === true).length;
+    const next = nextMission();
     return (
-      <div className="dashboard-card" style={{ background: 'var(--p2)', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '32px' }}>
-        <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--p5)' }}>{label}</span>
-        <h3 style={{ fontSize: '21px', fontWeight: '800', margin: '8px 0 6px 0', color: 'var(--g4)' }}>{p.rate}% 완료</h3>
-        <span style={{ fontSize: '10.5px', color: 'var(--g2)', fontWeight: '500' }}>남은 미션 : {p.remain}개</span>
+      <div className="rate-card mission">
+        <div className="rate-row">
+          <div className="rate-ring" style={{ background: `conic-gradient(var(--p5) 0 ${p.rate}%, var(--p2) ${p.rate}% 100%)` }}><b>{p.rate}%</b></div>
+          <div>
+            <div className="rate-label">{label}</div>
+            <div className="rate-counts">할 일 {todoDone}/{(todos || []).length} · 루틴 {routineDone}/{(backendRoutines || []).length} · 남은 미션 {p.remain}개</div>
+          </div>
+        </div>
+        <div className="rate-next">
+          <span style={{ minWidth: 0 }}>
+            <span className="rate-next-label">다음 미션</span>
+            <span className="rate-next-title">{next ? next.title : p.total > 0 ? '오늘의 미션을 모두 끝냈어요!' : '아직 미션이 없어요'}</span>
+          </span>
+          {next && next.time && <span className="rate-next-chip">{next.time}</span>}
+        </div>
       </div>
     );
   };
@@ -1572,7 +1625,7 @@ function MainAppView({
           <>
             <div className="header-row">
               <Menu size={22} className="cursor-pointer" color={C.g3} onClick={onOpenMenu} />
-              <h3 className="header-title">오늘의 미션 <span style={{fontSize:'13px', color:'var(--p5)', marginLeft:'8px'}}>{calMonth}/{selectedCalendarDay} {WEEKDAY_KO[targetDateObj.getDay()]}</span></h3>
+              <h3 className="header-title" style={{ height: '23px', lineHeight: '23px' }}>오늘의 미션 <span style={{fontSize:'13px', color:'var(--p5)', marginLeft:'8px', lineHeight: 1}}>{calMonth}/{selectedCalendarDay} {WEEKDAY_KO[targetDateObj.getDay()]}</span></h3>
               <Bell size={22} className="cursor-pointer" color={C.g3} onClick={onOpenNoti} />
             </div>
             {renderFilterBar()}
@@ -1622,9 +1675,9 @@ function MainAppView({
 
         return (
           <>
-            <div className="header-row"><Menu size={22} className="cursor-pointer" onClick={onOpenMenu} /><h3 className="header-title">달력</h3><Bell size={22} color={C.g3} onClick={onOpenNoti} /></div>
+            <div className="header-row"><Menu size={22} className="cursor-pointer" color={C.g3} onClick={onOpenMenu} /><h3 className="header-title">달력</h3><Bell size={22} color={C.g3} onClick={onOpenNoti} /></div>
             <div className="scroll-content">
-              <div style={{ background: '#ffffff', border: '1px solid var(--surface)', borderRadius: '24px', padding: '16px', position: 'relative' }}>
+              <div style={{ background: 'var(--p1)', borderRadius: '24px', padding: '16px', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <button className="cal-nav-btn" aria-label="이전 달" onClick={() => { setPickerOpen(null); handlePrevMonth(); }}><ChevronLeft size={18} /></button>
                   {/* 연도와 월을 눌러 바로 이동 */}
@@ -1659,6 +1712,8 @@ function MainAppView({
                     const dayNum = i + 1;
                     const isToday = isTodayInView && dayNum === todayDayNum;
                     const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                    const dayRate = calRates[dateStr];
+                    const isSel = dayNum === selectedCalendarDay;
                     return (
                       <div key={dayNum} className={`calendar-cell ${dayNum === selectedCalendarDay ? 'active' : ''}`}
                            title="더블클릭하면 이 날의 미션이 열려요"
@@ -1667,7 +1722,7 @@ function MainAppView({
                              flexDirection: 'column',
                              gap: '3px',
                              lineHeight: 1,
-                           } : undefined}
+                           } : { flexDirection: 'column', lineHeight: 1 }}
                            onClick={() => setGlobalDate(dateStr)}
                            onDoubleClick={() => { setGlobalDate(dateStr); setDayPageOpen(true); }}>
                         {dayNum}
@@ -1675,16 +1730,25 @@ function MainAppView({
                         {isToday && (
                           <span style={{ fontSize: '8px', fontWeight: '700', color: dayNum === selectedCalendarDay ? '#fff' : 'var(--p5)' }}>오늘</span>
                         )}
+                        {/* 그 날의 달성률 점: 25% 미만 2보라, 25~50% 3보라, 50~75% 4보라, 75% 이상 5보라 */}
+                        {!isToday && dayRate !== undefined && (
+                          <span className="cal-dot" style={{ background: isSel ? '#ffffff' : rateDotColor(dayRate) }} />
+                        )}
                       </div>
                     );
                   })}
                 </div>
+                <div className="cal-legend">
+                  <span>달성률 0%</span>
+                  {['var(--p2)', 'var(--p3)', 'var(--p4)', 'var(--p5)'].map(c => <i key={c} style={{ background: c }} />)}
+                  <span>100%</span>
+                </div>
               </div>
-              <div style={{ marginTop: '20px', fontWeight: '700', fontSize: '15px', color: 'var(--g2)' }}>
+              <div style={{ marginTop: '20px', fontWeight: '700', fontSize: '15px', color: 'var(--p5)' }}>
                 {calMonth}월 {selectedCalendarDay}일 미션
               </div>
               <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '500', color: 'var(--g3)' }}>
-                종합 미션 달성률 {missionProgress().rate}%
+                종합 미션 달성률 <b style={{ color: 'var(--p5)' }}>{missionProgress().rate}%</b>
               </div>
               {/* 한 번 클릭: 그 날의 미션을 간략하게 보기만 (수정·완료는 더블클릭해서 여는 페이지에서) */}
               {renderCompactDayList()}
@@ -1711,6 +1775,12 @@ function MainAppView({
           if (goalFilter === 'fail') return g.status === '실패';
           return true;
         });
+        // 달성률 칸: 올해 성공·실패 개수, 오늘 이후로 마감이 가장 가까운 진행중 목표
+        const goalSuccessCount = thisYearGoals.filter((g: any) => g.status === '성공').length;
+        const goalFailCount = thisYearGoals.filter((g: any) => g.status === '실패').length;
+        const upcoming = activeGoals.filter((g: any) => g.endDate && daysUntil(g.endDate) >= 0);
+        const nearestGoal: any = upcoming.length ? upcoming[0] : null;
+        const nearestLeft = nearestGoal ? daysUntil(nearestGoal.endDate) : 0;
         // 숨겨진 지난 연도 목표가 있으면 새해 안내 (닫으면 그 해에는 다시 안 보임)
         const pastGoalYears = (goals || []).filter((g: any) => g.status !== '진행중')
           .map((g: any) => goalYearOf(g)).filter((y: any) => y !== null && y < goalThisYear) as number[];
@@ -1729,7 +1799,7 @@ function MainAppView({
           <>
             <div className="header-row"><Menu size={22} className="cursor-pointer" color={C.g3} onClick={onOpenMenu} /><h3 className="header-title">목표</h3><Bell size={22} color={C.g3} onClick={onOpenNoti} /></div>
             
-            <div className="filter-tabs" style={{ justifyContent: 'flex-start', gap: '8px', padding: '0 20px', marginBottom: '16px' }}>
+            <div className="filter-tabs" style={{ justifyContent: 'flex-start', gap: '8px', padding: 0, marginBottom: '16px' }}>
               <button className={`chip ${goalFilter === 'all' ? 'active' : ''}`} style={goalFilter !== 'all' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--navy)', color: 'white' }} onClick={() => setGoalFilter('all')}>전체</button>
               <button className={`chip ${goalFilter === 'active' ? 'active' : ''}`} style={goalFilter !== 'active' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--navy)', color: 'white' }} onClick={() => setGoalFilter('active')}>진행중</button>
               <button className={`chip ${goalFilter === 'success' ? 'active' : ''}`} style={goalFilter !== 'success' ? { background: 'var(--surface)', color: 'var(--g2)' } : { background: 'var(--navy)', color: 'white' }} onClick={() => setGoalFilter('success')}>성공</button>
@@ -1737,9 +1807,21 @@ function MainAppView({
             </div>
 
             <div className="scroll-content">
-              <div className="dashboard-card" style={{ background: 'var(--navy)', color: 'white', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '24px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '500', opacity: 0.9 }}>나의 목표 달성률</span>
-                <h2 style={{ fontSize: '32px', fontWeight: '800', margin: '8px 0 0 0', color: 'white' }}>{dynamicOverallProgress}%</h2>
+              <div className="rate-card goal">
+                <div className="rate-row">
+                  <div className="rate-ring" style={{ background: `conic-gradient(#ffffff 0 ${dynamicOverallProgress}%, rgba(255,255,255,.22) ${dynamicOverallProgress}% 100%)` }}><b>{dynamicOverallProgress}%</b></div>
+                  <div>
+                    <div className="rate-label">나의 목표 달성률</div>
+                    <div className="rate-counts">성공 {goalSuccessCount} · 실패 {goalFailCount} · 진행중 {activeGoals.length}</div>
+                  </div>
+                </div>
+                <div className="rate-next">
+                  <span style={{ minWidth: 0 }}>
+                    <span className="rate-next-label">가장 가까운 마감</span>
+                    <span className="rate-next-title">{nearestGoal ? nearestGoal.title : '다가오는 마감이 없어요'}</span>
+                  </span>
+                  {nearestGoal && <span className="rate-next-chip">{nearestLeft === 0 ? 'D-day' : `D-${nearestLeft}`}</span>}
+                </div>
               </div>
 
               {showYearBanner && (
@@ -1764,10 +1846,9 @@ function MainAppView({
                 const statusColor = isSuccess ? 'var(--green)' : isFail ? 'var(--red)' : 'var(--orange)';
                 // 진행중 목표: 마감 7일 전부터 D-n, 마감이 지났으면 결과 기록 필요
                 const left = !isSuccess && !isFail && g.endDate ? daysUntil(g.endDate) : null;
-                const dBadge = left === null ? null
-                  : left < 0 ? <span className="goal-badge overdue">결과 기록 필요</span>
-                  : left <= 7 ? <span className="goal-badge dday">{left === 0 ? 'D-day' : `D-${left}`}</span>
-                  : null;
+                const dBadge = left !== null && left >= 0 && left <= 7
+                  ? <span className="goal-badge dday">{left === 0 ? 'D-day' : `D-${left}`}</span> : null;
+                const overdueBadge = left !== null && left < 0 ? <span className="goal-badge overdue small">결과 기록 필요</span> : null;
 
                 return (
                   <div key={`goal-${g.id}`} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', padding: '20px', background: '#fff', borderRadius: '20px', marginBottom: '16px', border: '1px solid var(--surface)', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }} 
@@ -1780,7 +1861,7 @@ function MainAppView({
                     
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: (g.description || g.desc) ? '6px' : '16px' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                        <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--g4)' }}>{g.title}</span>
+                        <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--g4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{g.title}</span>
                         {dBadge}
                       </span>
                       <span style={{ color: statusColor, fontSize: '13px', fontWeight: '700', flexShrink: 0 }}>{g.status}</span>
@@ -1795,7 +1876,7 @@ function MainAppView({
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '9px', color: 'var(--g1)', fontWeight: '500' }}>
-                        {g.startDate || '-'} ~ {g.endDate || '-'}
+                        {g.startDate || '-'} ~ {g.endDate || '-'}{overdueBadge}
                       </span>
                       <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
   <Pencil size={18} color={C.g1} onClick={(e) => { e.stopPropagation(); onEditGoal(g); }} />
@@ -1921,9 +2002,9 @@ function MainAppView({
         const failMessage = causeMsgs.length ? causeMsgs[Math.floor(failMsgSeed * causeMsgs.length) % causeMsgs.length] : '';
 
         // 막대 색
-        const routineCatColors = barColorsByRank(routineCats.map(c => c.rate), 'var(--red)', AMBER);
+        const routineCatColors = barColorsByRank(routineCats.map(c => c.rate), 'var(--red)', 'var(--orange2)');
         const goalCatColors = barColorsByRank(goalCats.map(c => c.rate), 'var(--navy)', 'var(--navy2)');
-        const failColors = barColorsByRank(dynamicFailData.map(f => f.rate), 'var(--red)', AMBER);
+        const failColors = barColorsByRank(dynamicFailData.map(f => f.rate), 'var(--red)', 'var(--orange2)');
 
         // 저채도·중명도 보라 (요약에서 강조할 때)
         const MUTED_PURPLE = 'var(--p5)';
@@ -1983,7 +2064,7 @@ function MainAppView({
 
               {/* ===================== 루틴 ===================== */}
               <div style={{ background: '#ffffff', border: '1px solid var(--p1)', borderRadius: '20px', padding: '18px 16px', marginBottom: '28px' }}>
-                {sectionTitle(<RoutineIcon size={20} strokeWidth={2.4} color={C.p5} />, '루틴', `${viewYear}년`, 'var(--p5)', 'var(--p1)')}
+                {sectionTitle(<RoutineIcon size={20} strokeWidth={2.4} color={C.p5} />, '루틴', `${viewYear}년`, 'var(--p5)', 'var(--p15)')}
 
                 <div className="stats-chart-title" style={{ marginLeft: '2px' }}>기간별 루틴 수행률</div>
                 <div className="filter-tabs" style={{ padding: 0, margin: '10px 0 6px', gap: '8px' }}>
@@ -2007,7 +2088,7 @@ function MainAppView({
                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '6px', minWidth: 0 }}>
                         <span style={{ fontSize: '8px', color: 'var(--g1)', fontWeight: '600', minHeight: '10px' }}>{item.rate === null ? '' : `${item.rate}%`}</span>
                         <div title={item.rate === null ? '기록 없음' : `${item.rate}%`}
-                             style={{ height: `${(item.rate ?? 0) * 1.0}px`, width: period === 'month' ? '12px' : '20px', background: isTop ? 'var(--p4)' : 'var(--p1)', borderRadius: '5px', transition: '0.3s' }}></div>
+                             style={{ height: `${(item.rate ?? 0) * 1.0}px`, width: period === 'month' ? '12px' : '20px', background: isTop ? 'var(--p5)' : 'var(--p2)', borderRadius: '5px', transition: '0.3s' }}></div>
                         <span style={{ fontSize: '9px', color: isViewing ? 'var(--p5)' : 'var(--g1)', fontWeight: isViewing ? '800' : '600', whiteSpace: 'nowrap' }}>{item.label}</span>
                       </div>
                     );
@@ -2063,7 +2144,7 @@ function MainAppView({
                 {/* 실패 원인 레포트 (목표 색에 맞춘 남색 계열). 실패 기록이 없으면 표시하지 않음 */}
                 {topFailNames.length > 0 && (
                   <div className="goal-summary">
-                    <div className="goal-summary-head">트래커님의 주된 목표 실패 원인은 {topFailNames.join(', ')}!</div>
+                    <div className="goal-summary-head">트래커님의 주된 목표 실패 원인은 <b>{topFailNames.join(', ')}!</b></div>
                     <div className="goal-summary-body">{failMessage}</div>
                   </div>
                 )}
@@ -2589,6 +2670,26 @@ const fetchServerNotifications = async () => {
 };
 
 // 통계 화면에서 쓸 데이터(올해 + 최근 3개월)를 한 번에 받아온다
+  // 달력의 날짜별 달성률용: 보고 있는 달의 할 일·루틴 기록·루틴
+  const [calMonthData, setCalMonthData] = useState<any>(null);
+  const fetchCalendarMonth = async (dateStr: string) => {
+    if (!localStorage.getItem('token')) return;
+    const [y, m] = dateStr.split('-').map(Number);
+    const start = `${y}-${String(m).padStart(2, '0')}-01`;
+    const end = toDateStr(new Date(y, m, 0));
+    try {
+      const [tRes, rRes, routRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/todos/range?start=${start}&end=${end}`, { headers: authHeaders() }),
+        fetch(`${BASE_URL}/api/records/range?start=${start}&end=${end}`, { headers: authHeaders() }),
+        fetch(`${BASE_URL}/api/routines`, { headers: authHeaders() }),
+      ]);
+      const todosM = tRes.ok ? await tRes.json() : [];
+      const recs = rRes.ok ? await rRes.json() : [];
+      const routs = routRes.ok ? await routRes.json() : [];
+      setCalMonthData({ key: `${y}-${String(m).padStart(2, '0')}`, todos: Array.isArray(todosM) ? todosM : [], records: Array.isArray(recs) ? recs : [], routines: Array.isArray(routs) ? routs : [] });
+    } catch (e) { console.error('달력 달성률 데이터 로딩 실패', e); }
+  };
+
   const fetchStatsData = async () => {
     if (!localStorage.getItem('token')) return;
     const end = new Date();
@@ -2681,6 +2782,12 @@ useEffect(() => {
     if (view === 'main' && activeTab === 'stats') fetchStatsData();
   }, [view, activeTab]);
 
+  // 달력: 보고 있는 달이 바뀌거나, 미션을 체크해서 그 날 목록이 바뀌면 날짜별 달성률을 다시 계산
+  const calMonthKey = String(globalDate || getTodayStr()).slice(0, 7);
+  useEffect(() => {
+    if (view === 'main' && activeTab === 'calendar') fetchCalendarMonth(globalDate || getTodayStr());
+  }, [view, activeTab, calMonthKey, todos, backendRoutines]);
+
   
 const [todoFilter, setTodoFilter] = useState<string>('all');
   const [goalFilter, setGoalFilter] = useState<string>('all');
@@ -2727,7 +2834,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
             onOpenNoti={() => setView('noti')} 
             onOpenMenu={() => setIsSidebarOpen(true)}
             onEditTodo={handleEditTodo} onEditRoutine={handleEditRoutine} onEditGoal={handleEditGoal} 
-            statsRecords={statsRecords} allRoutines={allRoutines}
+            statsRecords={statsRecords} allRoutines={allRoutines} calMonthData={calMonthData}
           />
           
           {isSidebarOpen && (
@@ -2744,10 +2851,10 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
               }}>
                 
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '32px' }}>
-                  <div style={{ width: '48px', height: '48px', background: 'var(--p2)', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', marginRight: '16px' }}>
+                  <div style={{ width: '48px', height: '48px', background: 'var(--p1)', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', marginRight: '16px' }}>
                     <User size={24} color={C.p5} />
                   </div>
-                  <div>
+                  <div style={{ textAlign: 'left' }}>
                     <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--g4)' }}>{userProfile.name}</div>
                     <div style={{ fontSize: '13px', color: 'var(--g1)' }}>{userProfile.email}</div>
                   </div>
@@ -2761,7 +2868,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
                     { key: 'noti-settings', label: '알림 설정', icon: <Bell size={18} style={{ marginRight: '12px' }} /> },
                   ].map(m => (
                     <div key={m.key} className="cursor-pointer"
-                         style={{ background: 'var(--p2)', color: 'var(--p5)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '14px' }}
+                         style={{ background: 'var(--p1)', color: 'var(--p5)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '14px' }}
                          onClick={() => { setIsSidebarOpen(false); setNotiSettingsBack('main'); setView(m.key); }}>
                       {m.icon} {m.label}
                     </div>
@@ -2769,7 +2876,7 @@ const [todoFilter, setTodoFilter] = useState<string>('all');
                 </div>
 
                 <div style={{ marginTop: 'auto' }}>
-                  <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: 'var(--g4)' }} onClick={handleLogout}>
+                  <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: 'var(--g2)' }} onClick={handleLogout}>
                     <LogOut size={20} style={{ marginRight: '16px' }} /> 로그아웃
                   </div>
                   <div className="cursor-pointer" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', fontSize: '15px', fontWeight: '600', color: 'var(--red)' }} onClick={handleDeleteAccount}>

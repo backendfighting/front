@@ -2,11 +2,14 @@
   /* ===== GoalTracker 색 (여기만 바꾸면 앱 전체가 바뀜) ===== */
   /* 메인 보라 5단계: 5가 가장 진함. 2보라는 종합 미션 달성률 칸 전용이라 아주 연함 */
   --p5: #6a60de;
-  --p4: #8981e7;
-  --p3: #aaa4ef;
-  --p2: #f3f2fe;
-  --p1: #eae9fc;
+  --p4: #8b83e9;
+  --p3: #aea8f2;
+  --p2: #d3d0f9;
+  --p1: #f9f8ff;
+  /* 1보라와 2보라 사이: 루틴 심볼 사각형, 작게 칠하는 선택·마우스 올림 표시 */
+  --p15: #e6e4fc;
   /* 남색: 목표와 알림 설정 전용 */
+  --navy3: #444f70;
   --navy: #5b678c;
   --navy2: #c5cbe0;
   --navy1: #eef1f8;
@@ -14,6 +17,7 @@
   --red: #e8787c;
   --red1: #fdeeee;
   --orange: #eba44c;
+  --orange2: #f4cc99;
   --orange1: #fdf3e6;
   --green: #5aaf78;
   /* 회색 글씨 4단계: 제목 / 본문 / 보조 / 흐림 */
@@ -27,7 +31,7 @@
   --line: #ecebf1;
   /* 버튼·스위치·선택된 칩의 색: 기본은 5보라, 목표·알림 설정 화면에서는 남색으로 바뀜 */
   --ctl: var(--p5);
-  --ctl-soft: var(--p1);
+  --ctl-soft: var(--p15);
   --ctl-line: var(--p3);
 }
 
@@ -244,7 +248,7 @@ input, select, textarea {
   border-radius: 8px;
   transition: background 0.15s;
 }
-.date-picker-btn:hover { background: var(--p1); }
+.date-picker-btn:hover { background: var(--p15); }
 .date-picker-pop {
   position: absolute;
   top: 52px;
@@ -274,7 +278,7 @@ input, select, textarea {
   border-radius: 10px;
   cursor: pointer;
 }
-.calendar-cell:hover { background-color: var(--p1); }
+.calendar-cell:hover { background-color: var(--p15); }
 .calendar-cell.active { background-color: var(--p5); color: white; }
 .calendar-cell.empty { cursor: default; }
 
@@ -322,7 +326,7 @@ input, select, textarea {
   font-size: 15px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
 }
-.result-btn.success.active { border-color: var(--p5); color: var(--p5); background: var(--p2); }
+.result-btn.success.active { border-color: var(--p5); color: var(--p5); background: var(--p1); }
 .result-btn.fail.active { border-color: var(--red); color: var(--red); background: var(--red1); }
 
 /* 회원가입 약관 레이아웃 */
@@ -381,8 +385,8 @@ input, select, textarea {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 10.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   color: var(--g3);
   line-height: 1.7;
 }
@@ -496,14 +500,14 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
   padding: 8px 10px; border-radius: 8px;
   font-size: 13px; font-weight: 400; color: var(--g3); cursor: pointer; white-space: nowrap;
 }
-.pick-list li:hover { background: var(--p2); }
+.pick-list li:hover { background: var(--p1); }
 .pick-list li.active { background: var(--ctl-soft); color: var(--ctl); font-weight: 500; }
 
 /* 달력 < > 버튼 */
 .cal-nav-btn {
   width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center;
-  border: none; border-radius: 10px; background: var(--surface); color: var(--ctl);
+  border: none; border-radius: 10px; background: #ffffff; color: var(--ctl);
   cursor: pointer;
 }
 .cal-nav-btn:hover { background: var(--line); }
@@ -544,8 +548,9 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
   margin-top: 14px;
   text-align: left;
 }
-.goal-summary-head { font-size: 12px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
-.goal-summary-body { font-size: 11px; font-weight: 600; color: var(--navy); line-height: 1.7; }
+.goal-summary-head { font-size: 12px; font-weight: 600; color: var(--navy); margin-bottom: 6px; }
+.goal-summary-head b { font-weight: 800; color: var(--navy3); }
+.goal-summary-body { font-size: 11px; font-weight: 400; color: var(--navy); line-height: 1.7; }
 
 /* 통계 그래프 제목 */
 .stats-chart-title { font-size: 13px; font-weight: 700; text-align: left; color: var(--g3); }
@@ -554,11 +559,11 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
 .stats-chart-desc { font-size: 9px; font-weight: 500; color: var(--g2); text-align: left; margin-left: 2px; white-space: pre-line; line-height: 1.5; }
 /* 연간 그래프: 막대를 누르면 그 해 기록 */
 .year-bar { cursor: pointer; border-radius: 8px; }
-.year-bar:hover { background: var(--p2); }
+.year-bar:hover { background: var(--p1); }
 /* 지난 연도를 보고 있을 때 맨 위 안내 */
 .past-year-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  background: var(--p1); border-radius: 14px; padding: 10px 12px; margin-bottom: 14px;
+  background: var(--p15); border-radius: 14px; padding: 10px 12px; margin-bottom: 14px;
   font-size: 12.5px; color: var(--p5); text-align: left;
 }
 .past-year-bar button {
@@ -592,3 +597,50 @@ input.pick-input { width: 100%; height: 34px; margin: 0; padding: 0 10px; border
 
 /* 통계: 루틴·목표 심볼을 넣는 둥근 사각형 */
 .stats-icon-box { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+/* 모든 입력칸·버튼 글꼴을 앱 글꼴로 통일 (메모 칸만 굴림체로 보이던 문제) */
+input, select, textarea, button { font-family: inherit; }
+/* 선택 상자: 화살표를 오른쪽 끝에서 조금 안쪽으로 */
+select {
+  -webkit-appearance: none; appearance: none;
+  padding-right: 38px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a7680' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+}
+
+/* 오늘의 미션·목표 달성률 칸 (링 + 다음 미션/마감). 글씨 크기·굵기는 두 칸이 같음 */
+.rate-card { border-radius: 24px; padding: 20px 22px; margin-bottom: 24px; text-align: left; }
+.rate-card.mission { background: var(--p1); }
+.rate-card.goal { background: var(--navy); color: #fff; }
+.rate-row { display: flex; align-items: center; gap: 14px; }
+.rate-ring { width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.rate-ring b { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; }
+.rate-card.mission .rate-ring b { background: var(--p1); color: var(--g4); }
+.rate-card.goal .rate-ring b { background: var(--navy); color: #fff; }
+.rate-label { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.rate-card.mission .rate-label { color: var(--p5); }
+.rate-counts { font-size: 10.5px; font-weight: 500; line-height: 1.6; }
+.rate-card.mission .rate-counts { color: var(--g2); }
+.rate-card.goal .rate-counts { color: rgba(255, 255, 255, .85); }
+.rate-next { margin-top: 14px; padding-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.rate-card.mission .rate-next { border-top: 1px solid var(--p15); }
+.rate-card.goal .rate-next { border-top: 1px solid rgba(255, 255, 255, .2); }
+.rate-next-label { display: block; font-size: 10.5px; font-weight: 500; margin-bottom: 2px; }
+.rate-card.mission .rate-next-label { color: var(--g2); }
+.rate-card.goal .rate-next-label { color: rgba(255, 255, 255, .8); }
+.rate-next-title { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.rate-card.mission .rate-next-title { color: var(--g4); }
+.rate-next-chip { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 9px; }
+.rate-card.mission .rate-next-chip { background: var(--p15); color: var(--p5); }
+.rate-card.goal .rate-next-chip { background: var(--orange1); color: var(--orange); }
+
+/* 달력: 날짜 아래 달성률 점 + 색 안내 */
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; display: block; margin-top: 3px; }
+.cal-legend { display: flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 9px; color: var(--g2); }
+.cal-legend i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+.mini-list .mini-head { display: inline-block; background: var(--p1); color: var(--p5); padding: 2px 8px; border-radius: 7px; }
+.mini-list .mini-check { color: var(--p3); }
+/* 목표: 마감 지난 목표의 '결과 기록 필요' (날짜 옆, 작게) */
+.goal-badge.overdue.small { font-size: 8px; padding: 1px 5px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
+.year-banner-text { word-break: keep-all; }
